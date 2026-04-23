@@ -10,22 +10,22 @@ export function ReportHeader({ title, date, activeTab, logo }: { title: string, 
         </div>
       )}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h1 className="text-3xl font-medium text-stone-700">{title}</h1>
+        <h1 className="text-3xl font-medium" style={{ color: 'var(--report-text, inherit)' }}>{title}</h1>
         <div className="flex gap-2">
-          <button className="px-4 py-1.5 bg-stone-200/50 rounded-full text-xs font-semibold text-stone-600 border border-stone-300">General Email Marketing</button>
-          <button className="px-4 py-1.5 bg-transparent rounded-full text-xs font-semibold text-stone-400">eCommerce Email Marketing</button>
+          <button className="px-4 py-1.5 rounded-full text-xs font-semibold border border-stone-300" style={{ backgroundColor: 'rgba(231, 229, 228, 0.5)', color: 'var(--report-text, inherit)' }}>General Email Marketing</button>
+          <button className="px-4 py-1.5 bg-transparent rounded-full text-xs font-semibold opacity-60" style={{ color: 'var(--report-text, inherit)' }}>eCommerce Email Marketing</button>
         </div>
       </div>
       
       <div className="report-card flex flex-col md:flex-row md:items-center justify-between gap-6 py-4">
         <div className="flex items-center gap-4">
-           <div className="bg-mustard/20 p-2 rounded-lg text-mustard">
+           <div className="p-2 rounded-lg text-mustard" style={{ backgroundColor: 'rgba(233, 185, 73, 0.2)' }}>
               <Settings2 size={18} />
            </div>
            <div>
-              <p className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">Date period</p>
-              <p className="text-sm font-semibold text-stone-700">{date}</p>
-              <p className="text-[10px] text-stone-400">Duration: 30 days</p>
+              <p className="text-[10px] uppercase font-bold opacity-50 tracking-wider" style={{ color: 'var(--report-text, inherit)' }}>Date period</p>
+              <p className="text-sm font-semibold italic" style={{ color: 'var(--report-text, inherit)' }}>{date}</p>
+              <p className="text-[10px] opacity-50" style={{ color: 'var(--report-text, inherit)' }}>Duration: 30 days</p>
            </div>
         </div>
         <div className="flex gap-3 h-8 items-center border-l border-stone-200 pl-6">

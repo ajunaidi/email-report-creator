@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   BarChart3, Users, Mail, TrendingUp, MousePointerClick, 
-  LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image as ImageIcon, FileText
+  LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image as ImageIcon, FileText,
+  Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -18,10 +19,138 @@ import { SummarySection, MetricCardSmall } from './components/ReportSections';
 import { EmailPerformanceTable, GoalTracker } from './components/TableSections';
 import { GrowthChart, DistributionChart, FunnelDisplay } from './components/ChartSections';
 import { Line } from 'react-chartjs-2';
+import debounce from 'lodash.debounce';
+import { auth } from './lib/firebase';
+import { 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  onAuthStateChanged,
+  User,
+  signOut
+} from 'firebase/auth';
+import { saveReport, getReport } from './services/reportService';
 
 export default function App() {
   const [data, setData] = useState<ReportData>(MOCK_FULL_DATA);
+  const [reportId, setReportId] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isViewerMode, setIsViewerMode] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
+
+  // Authentication Listener
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setIsViewerMode(params.get('viewer') === 'true');
+    
+    // Auto-hide sidebar on mobile
+    if (window.innerWidth < 768) {
+      setIsSidebarOpen(false);
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Load report from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('reportId');
+    if (id) {
+      loadReport(id);
+    }
+  }, []);
+
+  const loadReport = async (id: string) => {
+    setIsLoading(true);
+    try {
+      const report = await getReport(id);
+      if (report) {
+        setData(report.data);
+        setReportId(id);
+      }
+    } catch (err) {
+      console.error("Failed to load report", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      console.error("Sign in failed", err);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setReportId(null);
+      setData(MOCK_FULL_DATA);
+    } catch (err) {
+      console.error("Sign out failed", err);
+    }
+  };
+
+  // Auto-save logic
+  const debouncedSave = useCallback(
+    debounce(async (currentData: ReportData, currentId: string | null, currentUser: User | null) => {
+      if (!currentUser) return;
+      setIsSaving(true);
+      try {
+        const id = await saveReport(currentId, currentData);
+        if (!currentId) {
+          setReportId(id);
+          const newUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?reportId=${id}`;
+          window.history.pushState({ path: newUrl }, '', newUrl);
+        }
+      } catch (err) {
+        console.error("Auto-save failed", err);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 2000),
+    []
+  );
+
+  useEffect(() => {
+    if (user) {
+      debouncedSave(data, reportId, user);
+    }
+  }, [data, user, reportId, debouncedSave]);
+
+  const handleGenerateShareLink = async () => {
+    if (!user) {
+      await handleSignIn();
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const id = await saveReport(reportId, data);
+      setReportId(id);
+      // Create a viewer link
+      const shareUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?reportId=${id}&viewer=true`;
+      await navigator.clipboard.writeText(shareUrl);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 3000);
+      
+      const newUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?reportId=${id}`;
+      window.history.pushState({ path: newUrl }, '', newUrl);
+    } catch (err) {
+      console.error("Failed to generate share link", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleDownloadHTML = () => {
     if (!reportRef.current) return;
@@ -76,32 +205,71 @@ export default function App() {
     
     // Create a styled clone for PDF capture
     const captureWrapper = document.createElement('div');
+    captureWrapper.id = 'pdf-capture-wrapper';
     captureWrapper.style.backgroundColor = data.themeColor;
-    captureWrapper.style.padding = '40px';
+    captureWrapper.style.padding = '60px';
     captureWrapper.style.width = '1200px'; 
+    captureWrapper.style.position = 'fixed';
+    captureWrapper.style.top = '-20000px'; // Move further away
+    captureWrapper.style.left = '-10000px';
     captureWrapper.style.fontFamily = fontFamilyMap[data.fontFamily];
     captureWrapper.style.setProperty('--accent-color', data.accentColor);
     captureWrapper.style.setProperty('--card-bg', data.cardColor);
     captureWrapper.style.setProperty('--report-text', data.textColor);
     captureWrapper.style.setProperty('--card-radius', borderRadiusMap[data.borderRadius]);
-    captureWrapper.innerHTML = element.innerHTML;
+    
+    // Deep clone the element to preserve structure
+    const clone = element.cloneNode(true) as HTMLElement;
+    captureWrapper.appendChild(clone);
     document.body.appendChild(captureWrapper);
 
+    // CRITICAL: Copy canvas content from original to clone
+    const originalCanvases = element.querySelectorAll('canvas');
+    const clonedCanvases = clone.querySelectorAll('canvas');
+    
+    originalCanvases.forEach((originalCanvas, index) => {
+      const clonedCanvas = clonedCanvases[index] as HTMLCanvasElement;
+      if (clonedCanvas) {
+        const destCtx = clonedCanvas.getContext('2d');
+        if (destCtx) {
+          destCtx.drawImage(originalCanvas, 0, 0);
+        }
+      }
+    });
+
     try {
+      // Wait for layout and images
+      await new Promise(resolve => setTimeout(resolve, 800));
+
       const canvas = await html2canvas(captureWrapper, {
         scale: 2,
         useCORS: true,
         backgroundColor: data.themeColor,
-        windowWidth: 1200
+        windowWidth: 1200,
+        logging: false,
+        onclone: (clonedDoc) => {
+          const wrapper = clonedDoc.getElementById('pdf-capture-wrapper');
+          if (wrapper) {
+            wrapper.style.top = '0';
+            wrapper.style.left = '0';
+          }
+        }
       });
       
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      
+      // Calculate dimensions for a SINGLE long page
+      // jsPDF units are mm. 1200px at 72dpi is approx 423mm
+      // But we use a standard width (e.g. 210mm for A4) and scale the height accordingly
+      const pdfWidth = 210; 
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Report_${Date.now()}.pdf`);
+      const pdf = new jsPDF('p', 'mm', [pdfWidth, pdfHeight]);
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      
+      pdf.save(`Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`);
+    } catch (err) {
+      console.error("PDF generation failed", err);
     } finally {
       document.body.removeChild(captureWrapper);
     }
@@ -159,15 +327,74 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: data.themeColor }}>
+    <div className="flex h-screen overflow-hidden relative" style={{ backgroundColor: data.themeColor }}>
       {/* Sidebar - Control Panel */}
-      <aside id="sidebar-editor" className="w-[380px] bg-stone-900 text-white overflow-y-auto border-r border-stone-800 hidden md:block p-6 space-y-6 scrollbar-thin">
-        <div className="flex items-center gap-3 mb-6 bg-stone-800/50 p-4 rounded-xl border border-stone-700">
-          <div className="w-10 h-10 bg-mustard rounded-xl flex items-center justify-center text-stone-900 border-2 border-white/20"><Mail size={20} /></div>
+      <aside 
+        id="sidebar-editor" 
+        className={cn(
+          "w-full md:w-[380px] bg-stone-900 text-white overflow-y-auto border-r border-stone-800 p-6 space-y-6 scrollbar-thin transition-all duration-300 fixed md:relative z-40 h-full",
+          !isSidebarOpen || isViewerMode ? "-translate-x-full md:hidden" : "translate-x-0"
+        )}
+      >
+        <div className="flex items-center gap-3 p-4 rounded-xl border border-stone-700" style={{ backgroundColor: 'rgba(41, 37, 36, 0.5)' }}>
+          <div className="w-10 h-10 bg-mustard rounded-xl flex items-center justify-center text-stone-900 border-2" style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}><Mail size={20} /></div>
           <div>
             <h1 className="font-bold text-lg leading-tight uppercase tracking-tighter">MailDash</h1>
             <p className="text-[10px] text-stone-400 uppercase tracking-widest font-black">Report Builder</p>
           </div>
+        </div>
+
+        {/* User & Sharing Controls */}
+        <div className="p-4 rounded-xl border border-stone-700 space-y-3" style={{ backgroundColor: 'rgba(41, 37, 36, 0.8)' }}>
+          {user ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <div className="w-8 h-8 flex-shrink-0 rounded-full bg-mustard flex items-center justify-center text-stone-900 border border-white/20">
+                  <UserIcon size={14} />
+                </div>
+                <div className="overflow-hidden">
+                  <p className="text-[10px] font-bold truncate">{user.displayName || user.email}</p>
+                  <p className="text-[8px] text-stone-400 uppercase tracking-widest flex items-center gap-1">
+                    {isSaving ? <Loader2 size={8} className="animate-spin" /> : <Save size={8} />}
+                    {isSaving ? 'Saving...' : 'All changes saved'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={handleSignOut} 
+                className="p-2 hover:bg-red-500/10 text-stone-500 hover:text-red-500 rounded-lg transition-colors flex-shrink-0"
+                title="Sign Out"
+              >
+                <LogOut size={14} />
+              </button>
+            </div>
+          ) : (
+            <button onClick={handleSignIn} className="w-full flex items-center justify-center gap-2 py-2.5 bg-white text-stone-900 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-stone-100 transition-colors">
+              <LogIn size={14} /> Sign in to Auto-Save
+            </button>
+          )}
+
+          <button 
+            onClick={handleGenerateShareLink} 
+            disabled={isSaving && !copySuccess}
+            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+              copySuccess ? 'bg-green-500 text-white' : 'bg-mustard text-stone-900 hover:bg-mustard/90'
+            }`}
+          >
+            {copySuccess ? <Plus size={14} className="rotate-45" /> : <Share2 size={14} />}
+            {copySuccess ? 'Link Copied!' : 'Copy Share Preview Link'}
+          </button>
+
+          {reportId && (
+            <a 
+              href={`${window.location.protocol}//${window.location.host}${window.location.pathname}?reportId=${reportId}&viewer=true`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-stone-800 text-stone-300 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-stone-700 transition-colors border border-stone-700"
+            >
+              <LinkIcon size={14} /> Open Live Preview
+            </a>
+          )}
         </div>
 
         <Section label="Brand Identity" icon={<Palette size={14} />}>
@@ -319,7 +546,7 @@ export default function App() {
         <Section label="11. Deals Breakdown" icon={<TrendingUp size={14} />}>
            <div className="space-y-2">
             {data.dealSources.map((s, idx) => (
-              <div key={s.id} className="flex gap-1 items-center bg-stone-800/50 p-2 rounded-lg border border-stone-800">
+              <div key={s.id} className="flex gap-1 items-center p-2 rounded-lg border border-stone-800" style={{ backgroundColor: 'rgba(41, 37, 36, 0.5)' }}>
                   <input className="flex-1 bg-stone-900 border-none rounded h-7 px-2 text-[10px] focus:ring-1 focus:ring-mustard" value={s.source} onChange={e => {
                     const copy = [...data.dealSources];
                     copy[idx].source = e.target.value;
@@ -477,14 +704,49 @@ export default function App() {
            <button onClick={handleDownloadPDF} className="w-full flex items-center justify-center gap-3 py-4 bg-stone-100 text-stone-900 rounded-xl hover:bg-white transition-all font-black uppercase tracking-tight shadow-xl group">
              <FileText size={18} className="group-hover:text-red-600 transition-colors" /> Save as Professional PDF
            </button>
-           <button onClick={handleDownloadHTML} className="w-full flex items-center justify-center gap-3 py-4 bg-mustard text-stone-900 rounded-xl hover:bg-mustard/90 transition-all font-black uppercase tracking-tight shadow-xl group">
+           <button onClick={handleDownloadHTML} className="w-full flex items-center justify-center gap-3 py-4 bg-mustard text-stone-900 rounded-xl hover:opacity-90 transition-all font-black uppercase tracking-tight shadow-xl group">
              <Download size={18} className="group-hover:scale-110 transition-transform" /> Save as Web Format (HTML)
            </button>
         </div>
       </aside>
 
       {/* Main Preview Area */}
-      <main className="flex-1 overflow-y-auto px-6 py-12 md:px-12 scroll-smooth pb-40">
+      <main className="flex-1 overflow-y-auto px-4 py-8 md:px-12 scroll-smooth pb-40 relative">
+        {/* Mobile Sidebar Toggle */}
+        {!isViewerMode && (
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="fixed bottom-6 right-6 z-50 md:hidden w-14 h-14 bg-stone-900 text-mustard rounded-full shadow-2xl flex items-center justify-center border border-stone-700"
+          >
+            {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        )}
+
+        {isLoading && (
+          <div className="absolute inset-0 bg-stone-900/10 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-4">
+              <Loader2 className="animate-spin text-mustard" size={40} />
+              <p className="font-bold text-stone-800 uppercase tracking-widest text-xs">Loading Shared Report...</p>
+            </div>
+          </div>
+        )}
+
+        {isViewerMode && !isLoading && (
+          <div className="max-w-[1000px] mx-auto mb-8 flex items-center justify-between gap-4 p-4 rounded-2xl bg-stone-900/40 backdrop-blur-md shadow-2xl border border-stone-700/50">
+             <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-mustard rounded-lg flex items-center justify-center text-stone-900"><Mail size={16} /></div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-white">Preview Content</p>
+             </div>
+             <div className="flex gap-2">
+                <button onClick={handleDownloadPDF} className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white rounded-lg text-[10px] font-bold uppercase tracking-tight hover:bg-white/20 transition-all border border-white/10">
+                    <FileText size={14} /> PDF
+                </button>
+                <button onClick={handleDownloadHTML} className="flex items-center gap-2 px-4 py-2 bg-mustard text-stone-900 rounded-lg text-[10px] font-bold uppercase tracking-tight hover:opacity-90 transition-all">
+                    <Download size={14} /> HTML
+                </button>
+             </div>
+          </div>
+        )}
         <div 
           ref={reportRef} 
           className="max-w-[1000px] mx-auto space-y-8 bg-transparent"
@@ -661,7 +923,7 @@ function MiniProgress({ label, val, max, color }: any) {
         <span className="text-stone-500 uppercase tracking-tight">{label}</span>
         <span className="text-stone-800">{val.toLocaleString()} / {max.toLocaleString()}</span>
       </div>
-      <div className="w-full h-1.5 bg-stone-100/50 rounded-full overflow-hidden">
+      <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(245, 245, 244, 0.5)' }}>
         <div className={`h-full`} style={{ width: `${(val / max) * 100}%`, backgroundColor: color }} />
       </div>
     </div>

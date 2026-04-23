@@ -1,0 +1,24 @@
+{
+  "entities": {
+    "Report": {
+      "title": "Email Marketing Report",
+      "description": "Stored report configuration and metrics",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The owner of the report" },
+        "reportTitle": { "type": "string" },
+        "datePeriod": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "data": { "type": "object", "description": "The complete ReportData object as JSON" }
+      },
+      "required": ["userId", "reportTitle", "data", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "Collection of saved email marketing reports"
+    }
+  }
+}

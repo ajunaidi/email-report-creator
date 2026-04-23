@@ -6,17 +6,17 @@ export function SummarySection({ summary, recommendations }: { summary: string, 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div className="report-card">
-        <h3 className="font-bold text-stone-900 mb-4 text-sm uppercase tracking-wide border-b border-stone-100 pb-2">Summary</h3>
-        <p className="text-stone-600 leading-relaxed text-sm whitespace-pre-wrap">
+        <h3 className="font-bold mb-4 text-sm uppercase tracking-wide border-b border-stone-100 pb-2" style={{ color: 'var(--report-text, inherit)' }}>Summary</h3>
+        <p className="leading-relaxed text-sm whitespace-pre-wrap opacity-80" style={{ color: 'var(--report-text, inherit)' }}>
           {summary}
         </p>
       </div>
       <div className="report-card">
-        <h3 className="font-bold text-stone-900 mb-4 text-sm uppercase tracking-wide border-b border-stone-100 pb-2">Recommendations</h3>
+        <h3 className="font-bold mb-4 text-sm uppercase tracking-wide border-b border-stone-100 pb-2" style={{ color: 'var(--report-text, inherit)' }}>Recommendations</h3>
         <ul className="space-y-4">
           {recommendations.map((rec, i) => (
-            <li key={i} className="flex gap-4 text-sm text-stone-600">
-              <span className="font-bold text-stone-400 min-w-[20px]">{i + 1}.</span>
+            <li key={i} className="flex gap-4 text-sm opacity-80" style={{ color: 'var(--report-text, inherit)' }}>
+              <span className="font-bold opacity-40 min-w-[20px]">{i + 1}.</span>
               <span>
                 {rec.split(/(-?\d+\.?\d*%)/).map((part, index) => 
                   part.match(/-?\d+\.?\d*%/) ? (
@@ -38,8 +38,8 @@ export function MetricCardSmall({ title, value, label, icon, desc, color }: { ti
   return (
     <div className="report-card flex flex-col justify-between group cursor-help">
       <div>
-        <h4 className="text-[10px] font-bold text-stone-400 uppercase mb-1 tracking-wider">{title}</h4>
-        {desc && <p className="text-[10px] text-stone-400 mb-4 leading-tight opacity-70">{desc}</p>}
+        <h4 className="text-[10px] font-bold opacity-40 uppercase mb-1 tracking-wider" style={{ color: 'var(--report-text, inherit)' }}>{title}</h4>
+        {desc && <p className="text-[10px] mb-4 leading-tight opacity-30" style={{ color: 'var(--report-text, inherit)' }}>{desc}</p>}
       </div>
       <div className="flex items-center gap-4 mt-2">
         <div 
@@ -49,12 +49,12 @@ export function MetricCardSmall({ title, value, label, icon, desc, color }: { ti
           {icon}
         </div>
         <div>
-          <p className="text-2xl font-black text-stone-900 tracking-tight">{value}</p>
-          <p className="text-[10px] font-bold text-stone-400 uppercase tracking-tight">{label}</p>
+          <p className="text-2xl font-black tracking-tight" style={{ color: 'var(--report-text, inherit)' }}>{value}</p>
+          <p className="text-[10px] font-bold opacity-40 uppercase tracking-tight" style={{ color: 'var(--report-text, inherit)' }}>{label}</p>
         </div>
       </div>
       <div className="mt-4 flex justify-end">
-        <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center scale-90 opacity-40 hover:opacity-100 transition-opacity">
+        <div className="w-5 h-5 rounded-full flex items-center justify-center scale-90 opacity-20 hover:opacity-100 transition-opacity" style={{ backgroundColor: 'var(--report-text, #000)10', color: 'var(--report-text, inherit)' }}>
            <ChevronRight size={10} />
         </div>
       </div>
