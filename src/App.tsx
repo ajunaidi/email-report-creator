@@ -207,29 +207,40 @@ export default function App() {
     const captureWrapper = document.createElement('div');
     captureWrapper.id = 'pdf-capture-wrapper';
     captureWrapper.style.backgroundColor = data.themeColor;
-    captureWrapper.style.padding = '60px';
-    captureWrapper.style.width = '1200px'; 
+    captureWrapper.style.padding = '0'; // Remove padding that causes excess space
+    captureWrapper.style.width = '1000px'; // Exact width of the report
     captureWrapper.style.position = 'fixed';
-    captureWrapper.style.top = '-20000px'; // Move further away
+    captureWrapper.style.top = '-10000px'; 
     captureWrapper.style.left = '-10000px';
     captureWrapper.style.fontFamily = fontFamilyMap[data.fontFamily];
+    
+    // Set all theme variables explicitly
     captureWrapper.style.setProperty('--accent-color', data.accentColor);
     captureWrapper.style.setProperty('--card-bg', data.cardColor);
     captureWrapper.style.setProperty('--report-text', data.textColor);
+    captureWrapper.style.setProperty('--h1-color', data.h1Color);
+    captureWrapper.style.setProperty('--h2-color', data.h2Color);
+    captureWrapper.style.setProperty('--h3-color', data.h3Color);
+    captureWrapper.style.setProperty('--desc-color', data.descColor);
     captureWrapper.style.setProperty('--card-radius', borderRadiusMap[data.borderRadius]);
     
-    // Deep clone the element to preserve structure
+    // Deep clone the element 
     const clone = element.cloneNode(true) as HTMLElement;
     captureWrapper.appendChild(clone);
     document.body.appendChild(captureWrapper);
 
-    // CRITICAL: Copy canvas content from original to clone
+    // CRITICAL: Copy canvas content AND styles from original to clone
     const originalCanvases = element.querySelectorAll('canvas');
     const clonedCanvases = clone.querySelectorAll('canvas');
     
     originalCanvases.forEach((originalCanvas, index) => {
       const clonedCanvas = clonedCanvases[index] as HTMLCanvasElement;
       if (clonedCanvas) {
+        // Force the clone to match the exact size of the original
+        clonedCanvas.width = originalCanvas.width;
+        clonedCanvas.height = originalCanvas.height;
+        clonedCanvas.style.width = originalCanvas.style.width;
+        clonedCanvas.style.height = originalCanvas.style.height;
         const destCtx = clonedCanvas.getContext('2d');
         if (destCtx) {
           destCtx.drawImage(originalCanvas, 0, 0);
@@ -238,30 +249,45 @@ export default function App() {
     });
 
     try {
-      // Wait for layout and images
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Wait for layout to stabilize
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       const canvas = await html2canvas(captureWrapper, {
-        scale: 2,
+        scale: 2.5,
         useCORS: true,
         backgroundColor: data.themeColor,
-        windowWidth: 1200,
+        width: 1000, 
         logging: false,
         onclone: (clonedDoc) => {
           const wrapper = clonedDoc.getElementById('pdf-capture-wrapper');
           if (wrapper) {
             wrapper.style.top = '0';
             wrapper.style.left = '0';
+            wrapper.style.position = 'relative';
+            wrapper.style.margin = '0';
+            
+            const innerReport = wrapper.firstChild as HTMLElement;
+            if (innerReport) {
+               // Force exact container dimensions to prevent text shifting
+               innerReport.style.margin = '0';
+               innerReport.style.width = '1000px';
+               innerReport.style.maxWidth = '1000px';
+               innerReport.style.padding = '40px'; // Add consistent internal padding
+               innerReport.style.boxSizing = 'border-box';
+               
+               // Ensure tables don't scroll/compress
+               innerReport.querySelectorAll('.overflow-x-auto').forEach((el: any) => {
+                 el.style.overflow = 'visible';
+                 el.style.width = '100%';
+               });
+            }
           }
         }
       });
       
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       
-      // Calculate dimensions for a SINGLE long page
-      // jsPDF units are mm. 1200px at 72dpi is approx 423mm
-      // But we use a standard width (e.g. 210mm for A4) and scale the height accordingly
-      const pdfWidth = 210; 
+      const pdfWidth = 210; // A4 Width in mm
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
       const pdf = new jsPDF('p', 'mm', [pdfWidth, pdfHeight]);
