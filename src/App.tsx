@@ -6,7 +6,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   BarChart3, Users, Mail, TrendingUp, MousePointerClick, 
-  LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image as ImageIcon, FileText,
+  LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image, Type, Maximize2, FileText,
   Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
@@ -432,7 +432,44 @@ export default function App() {
                 </div>
               </div>
             </div>
+          </div>
+        </Section>
 
+        <Section label="Text Colors" icon={<Type size={14} />}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">H1 Heading</label>
+                <div className="flex gap-2 items-center">
+                  <input type="color" value={data.h1Color} onChange={(e) => setData({ ...data, h1Color: e.target.value })} className="w-8 h-8 p-1 bg-stone-800 border border-stone-700 rounded-lg cursor-pointer" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">H2 Heading</label>
+                <div className="flex gap-2 items-center">
+                  <input type="color" value={data.h2Color} onChange={(e) => setData({ ...data, h2Color: e.target.value })} className="w-8 h-8 p-1 bg-stone-800 border border-stone-700 rounded-lg cursor-pointer" />
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">H3 Heading</label>
+                <div className="flex gap-2 items-center">
+                  <input type="color" value={data.h3Color} onChange={(e) => setData({ ...data, h3Color: e.target.value })} className="w-8 h-8 p-1 bg-stone-800 border border-stone-700 rounded-lg cursor-pointer" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">Description</label>
+                <div className="flex gap-2 items-center">
+                  <input type="color" value={data.descColor} onChange={(e) => setData({ ...data, descColor: e.target.value })} className="w-8 h-8 p-1 bg-stone-800 border border-stone-700 rounded-lg cursor-pointer" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </Section>
+
+        <Section label="Layout & Corner" icon={<Maximize2 size={14} />}>
+          <div className="space-y-4">
             <div>
               <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">Typography Style</label>
               <select 
@@ -462,11 +499,12 @@ export default function App() {
                 <option value="full">Pill (Full)</option>
               </select>
             </div>
+          </div>
+        </Section>
 
-            <div>
-              <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">Brand Logo</label>
+        <Section label="Brand Assets" icon={<Image size={14} />}>
               <label className="flex items-center gap-2 cursor-pointer bg-stone-800 border border-stone-700 rounded-lg p-3 hover:bg-stone-700 transition-all">
-                <ImageIcon size={14} className="text-mustard" />
+                <Image size={14} className="text-mustard" />
                 <span className="text-xs text-stone-300 font-bold">{data.clientLogo ? 'Update Logo' : 'Upload Logo'}</span>
                 <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
               </label>
@@ -483,8 +521,6 @@ export default function App() {
                   </button>
                 </div>
               )}
-            </div>
-          </div>
         </Section>
 
         <Section label="1. Project Basics" icon={<Settings2 size={14} />}>
@@ -754,6 +790,10 @@ export default function App() {
             '--accent-color': data.accentColor,
             '--card-bg': data.cardColor,
             '--report-text': data.textColor,
+            '--h1-color': data.h1Color,
+            '--h2-color': data.h2Color,
+            '--h3-color': data.h3Color,
+            '--desc-color': data.descColor,
             '--card-radius': borderRadiusMap[data.borderRadius],
             fontFamily: fontFamilyMap[data.fontFamily]
           } as React.CSSProperties}

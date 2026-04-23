@@ -96,6 +96,10 @@ export interface ReportData {
   accentColor: string;
   cardColor: string;
   textColor: string;
+  h1Color: string;
+  h2Color: string;
+  h3Color: string;
+  descColor: string;
   fontFamily: 'sans' | 'serif' | 'mono';
   borderRadius: 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
 }

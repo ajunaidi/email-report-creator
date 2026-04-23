@@ -84,6 +84,10 @@ export const MOCK_FULL_DATA: ReportData = {
   accentColor: "#dc2626",
   cardColor: "#fffdf5",
   textColor: "#1c1917",
+  h1Color: "#1c1917",
+  h2Color: "#1c1917",
+  h3Color: "#1c1917",
+  descColor: "#57534e",
   fontFamily: 'sans',
   borderRadius: '2xl',
   clientLogo: ""
