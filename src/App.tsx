@@ -217,8 +217,7 @@ export default function App() {
     setIsLoading(true);
     console.group("PDF Generation Diagnostic");
     console.log("Start Time:", new Date().toLocaleTimeString());
-    console.log("Report Data State:", data);
-
+    
     // 1. Create a dedicated capture host
     const captureHost = document.createElement('div');
     captureHost.id = 'pdf-capture-active';
@@ -248,15 +247,21 @@ export default function App() {
 
     // 2. Clone the element and clean it up for capture
     const clone = element.cloneNode(true) as HTMLElement;
-    clone.style.width = '1024px';
-    clone.style.maxWidth = '1024px';
-    clone.style.margin = '0';
+    clone.style.width = '1000px'; 
+    clone.style.maxWidth = '1000px';
+    clone.style.margin = '0 auto';
     clone.style.padding = '40px';
     clone.style.boxSizing = 'border-box';
-    clone.style.backgroundColor = 'transparent';
+    clone.style.backgroundColor = data.themeColor;
     clone.style.overflow = 'visible';
     
-    // Remove any interactive UI elements from the clone for a cleaner print
+    // Fix: Baseline clipping in tables by adding subtle padding to all spans
+    const allSpans = clone.querySelectorAll('span, p, div');
+    allSpans.forEach(el => {
+      (el as HTMLElement).style.paddingBottom = '3px';
+      (el as HTMLElement).style.lineHeight = '1.4';
+    });
+
     const buttons = clone.querySelectorAll('button');
     buttons.forEach(btn => btn.remove());
 
@@ -280,31 +285,26 @@ export default function App() {
 
     try {
       // 3. Robust wait for rendering (Fonts, Charts, Images)
-      console.log("Waiting for assets to load in clone...");
       const images = Array.from(clone.getElementsByTagName('img'));
       await Promise.all(images.map(img => {
         if (img.complete) return Promise.resolve();
         return new Promise(resolve => {
           img.onload = resolve;
-          img.onerror = () => {
-            console.warn("Failed to load image in clone:", img.src);
-            resolve(null);
-          };
+          img.onerror = () => resolve(null);
         });
       }));
 
-      // Extra delay for Recharts animations to finish fully
+      // Extra delay for animations
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      console.log("Commencing html2canvas capture...");
       const canvas = await html2canvas(captureHost, {
-        scale: 2, // 2x for better clarity
+        scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: data.themeColor,
         width: 1024,
         windowWidth: 1024,
-        logging: true,
+        logging: false,
         onclone: (clonedDoc) => {
           const host = clonedDoc.getElementById('pdf-capture-active');
           if (host) {
@@ -314,53 +314,33 @@ export default function App() {
         }
       });
 
-      console.log("Canvas captured. Dimensions:", canvas.width, "x", canvas.height);
-      
-      if (canvas.width === 0 || canvas.height === 0) {
-        throw new Error("Captured canvas is empty (0 height/width). Check if content is visible.");
-      }
-
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const imgProps = { width: canvas.width, height: canvas.height };
+      
+      // Calculate dimensions for a single continuous page (avoiding division of shapes)
+      const pdfWidth = 210; // A4 Width mm
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
       const pdf = new jsPDF({
         orientation: 'p',
         unit: 'mm',
-        format: 'a4',
+        format: [pdfWidth, pdfHeight], // Custom format: single long page
         compress: true
       });
 
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      
-      // Multi-page logic
-      let heightLeft = pdfHeight;
-      let position = 0;
-      const pageHeight = pdf.internal.pageSize.getHeight();
-
-      console.log("Building PDF pages. Calculated tall height (mm):", pdfHeight);
-      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - pdfHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
-        heightLeft -= pageHeight;
-      }
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
 
       const fileName = `Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
       pdf.save(fileName);
-      console.log("PDF download triggered:", fileName);
     } catch (err) {
       console.error("PDF generation failed:", err);
       alert("Failed to generate PDF. Error details in console.");
     } finally {
       if (document.body.contains(captureHost)) {
         document.body.removeChild(captureHost);
-        console.log("Capture host cleaned up");
       }
-      console.groupEnd();
       setIsLoading(false);
+      console.groupEnd();
     }
   };
 
@@ -949,11 +929,11 @@ export default function App() {
                 <h3 className="font-bold text-stone-900 text-sm uppercase tracking-wide">Deals value</h3>
                 <span className="text-[10px] font-bold text-stone-400 uppercase flex items-center gap-1">Value <TrendingUp size={10}/></span>
              </div>
-             <div className="space-y-3">
+             <div className="space-y-4">
                 {data.dealSources.map(s => (
-                  <div key={s.id} className="flex justify-between border-b border-stone-50 pb-2 text-sm">
-                    <span className="text-stone-600 truncate">{s.source}</span>
-                    <span className="font-bold text-stone-800">{s.value.toLocaleString()}</span>
+                  <div key={s.id} className="flex justify-between border-b border-stone-50 pb-3 text-sm leading-relaxed">
+                    <span className="text-stone-600 font-medium pr-4">{s.source}</span>
+                    <span className="font-bold text-stone-800 whitespace-nowrap">{s.value.toLocaleString()}</span>
                   </div>
                 ))}
              </div>
