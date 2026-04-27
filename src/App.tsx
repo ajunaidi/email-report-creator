@@ -216,20 +216,7 @@ export default function App() {
     
     setIsLoading(true);
     console.group("PDF Generation Diagnostic");
-    console.log("Start Time:", new Date().toLocaleTimeString());
     
-    // 1. Create a dedicated capture host
-    const captureHost = document.createElement('div');
-    captureHost.id = 'pdf-capture-active';
-    captureHost.style.position = 'absolute';
-    captureHost.style.left = '-9999px';
-    captureHost.style.top = '0';
-    captureHost.style.width = '1024px';
-    captureHost.style.backgroundColor = data.themeColor;
-    captureHost.style.color = data.textColor;
-    captureHost.style.fontFamily = fontFamilyMap[data.fontFamily];
-    
-    // Explicitly set theme variables so the clone inherits them correctly
     const themeStyles = {
       '--accent-color': data.accentColor,
       '--card-bg': data.cardColor,
@@ -240,95 +227,96 @@ export default function App() {
       '--desc-color': data.descColor,
       '--card-radius': borderRadiusMap[data.borderRadius]
     };
-    
-    Object.entries(themeStyles).forEach(([key, value]) => {
-      captureHost.style.setProperty(key, value);
-    });
-
-    // 2. Clone the element and clean it up for capture
-    const clone = element.cloneNode(true) as HTMLElement;
-    clone.style.width = '1000px'; 
-    clone.style.maxWidth = '1000px';
-    clone.style.margin = '0 auto';
-    clone.style.padding = '40px';
-    clone.style.boxSizing = 'border-box';
-    clone.style.backgroundColor = data.themeColor;
-    clone.style.overflow = 'visible';
-    
-    // Fix: Baseline clipping in tables by adding subtle padding to all spans
-    const allSpans = clone.querySelectorAll('span, p, div');
-    allSpans.forEach(el => {
-      (el as HTMLElement).style.paddingBottom = '3px';
-      (el as HTMLElement).style.lineHeight = '1.4';
-    });
-
-    const buttons = clone.querySelectorAll('button');
-    buttons.forEach(btn => btn.remove());
-
-    captureHost.appendChild(clone);
-    document.body.appendChild(captureHost);
-
-    // CRITICAL: Synchronize canvases - clones are blank by default
-    const originalCanvases = element.querySelectorAll('canvas');
-    const clonedCanvases = clone.querySelectorAll('canvas');
-    originalCanvases.forEach((orig, i) => {
-      const target = clonedCanvases[i] as HTMLCanvasElement;
-      if (target) {
-        target.width = orig.width;
-        target.height = orig.height;
-        const ctx = target.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(orig, 0, 0);
-        }
-      }
-    });
 
     try {
-      // 3. Robust wait for rendering (Fonts, Charts, Images)
-      const images = Array.from(clone.getElementsByTagName('img'));
-      await Promise.all(images.map(img => {
-        if (img.complete) return Promise.resolve();
-        return new Promise(resolve => {
-          img.onload = resolve;
-          img.onerror = () => resolve(null);
-        });
-      }));
-
-      // Extra delay for animations
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const canvas = await html2canvas(captureHost, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: data.themeColor,
-        width: 1024,
-        windowWidth: 1024,
-        logging: false,
-        onclone: (clonedDoc) => {
-          const host = clonedDoc.getElementById('pdf-capture-active');
-          if (host) {
-            host.style.position = 'relative';
-            host.style.left = '0';
-          }
-        }
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const imgProps = { width: canvas.width, height: canvas.height };
-      
-      // Calculate dimensions for a single continuous page (avoiding division of shapes)
-      const pdfWidth = 210; // A4 Width mm
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-
       const pdf = new jsPDF({
         orientation: 'p',
         unit: 'mm',
-        format: [pdfWidth, pdfHeight], // Custom format: single long page
+        format: 'a3',
         compress: true
       });
 
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      const pageWidth = 297; // A3 width mm
+      const captureWidth = 1200; // Optimal width for A3 resolution
+
+      const capturePage = async (selectors: string[], pageNum: number) => {
+        const pageHost = document.createElement('div');
+        pageHost.style.width = `${captureWidth}px`;
+        pageHost.style.padding = '80px';
+        pageHost.style.backgroundColor = data.themeColor;
+        pageHost.style.color = data.textColor;
+        pageHost.style.boxSizing = 'border-box';
+        pageHost.style.fontFamily = fontFamilyMap[data.fontFamily];
+        
+        Object.entries(themeStyles).forEach(([key, value]) => {
+          pageHost.style.setProperty(key, value);
+        });
+
+        selectors.forEach(selector => {
+          const original = element.querySelector(selector);
+          if (original) {
+            const clone = original.cloneNode(true) as HTMLElement;
+            clone.style.marginBottom = '60px';
+            clone.style.width = '1040px';
+            clone.style.maxWidth = '1040px';
+            clone.style.margin = '0 auto 60px auto';
+            clone.style.boxSizing = 'border-box';
+            
+            // Clean up
+            clone.querySelectorAll('button').forEach(b => b.remove());
+            
+            // Baseline fixes for table text
+            clone.querySelectorAll('span, p, div').forEach(el => {
+              (el as HTMLElement).style.paddingBottom = '2px';
+            });
+
+            // Canvas Sync
+            const originalCanvases = original.querySelectorAll('canvas');
+            const clonedCanvases = clone.querySelectorAll('canvas');
+            originalCanvases.forEach((orig, i) => {
+              const target = clonedCanvases[i] as HTMLCanvasElement;
+              if (target) {
+                target.width = orig.width;
+                target.height = orig.height;
+                target.getContext('2d')?.drawImage(orig, 0, 0);
+              }
+            });
+
+            pageHost.appendChild(clone);
+          }
+        });
+
+        document.body.appendChild(pageHost);
+
+        const canvas = await html2canvas(pageHost, {
+          scale: 1.5,
+          useCORS: true,
+          backgroundColor: data.themeColor,
+          width: captureWidth,
+          windowWidth: captureWidth,
+          logging: false
+        });
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const imgHeightInPdf = (canvas.height * pageWidth) / canvas.width;
+
+        if (pageNum > 1) pdf.addPage('a3');
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, imgHeightInPdf);
+        
+        document.body.removeChild(pageHost);
+      };
+
+      // PAGE 1: Header, Goals, Summary, Key Metrics
+      await capturePage(['#pdf-header', '#pdf-goals-summary', '#pdf-main-summary', '#pdf-key-metrics'], 1);
+
+      // PAGE 2: Comparison Charts, Deals Value List
+      await capturePage(['#pdf-comparison-charts', '#pdf-deals-value-list'], 2);
+
+      // PAGE 3: Email Engagement Goals, Metrics Row, Trend Chart
+      await capturePage(['#pdf-engagement-goals', '#pdf-email-metrics-row', '#pdf-sent-opens-chart'], 3);
+
+      // PAGE 4: Link Rates, Funnel/Trend row, Footer Metrics, Performance Table
+      await capturePage(['#pdf-link-stats', '#pdf-funnel-trend-row', '#pdf-footer-metrics', '#pdf-performance-table'], 4);
 
       const fileName = `Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
       pdf.save(fileName);
@@ -336,9 +324,6 @@ export default function App() {
       console.error("PDF generation failed:", err);
       alert("Failed to generate PDF. Error details in console.");
     } finally {
-      if (document.body.contains(captureHost)) {
-        document.body.removeChild(captureHost);
-      }
       setIsLoading(false);
       console.groupEnd();
     }
@@ -884,10 +869,12 @@ export default function App() {
           } as React.CSSProperties}
         >
           
-          <ReportHeader title={data.reportTitle} date={data.datePeriod} activeTab="General" logo={data.clientLogo} />
+          <div id="pdf-header">
+            <ReportHeader title={data.reportTitle} date={data.datePeriod} activeTab="General" logo={data.clientLogo} />
+          </div>
 
           {/* Row 1: Goals */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div id="pdf-goals-summary" className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <GoalTracker 
               title="Deals and Conversion Goals"
               label1="Contact Count" val1={data.conversionCount} max1={data.conversionGoal} color1={data.accentColor}
@@ -908,23 +895,25 @@ export default function App() {
             </div>
           </div>
 
-          <SummarySection summary={data.summary} recommendations={data.recommendations} />
+          <div id="pdf-main-summary">
+            <SummarySection summary={data.summary} recommendations={data.recommendations} />
+          </div>
 
           {/* Row 3: Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div id="pdf-key-metrics" className="grid grid-cols-1 md:grid-cols-3 gap-6">
              <MetricCardSmall title="Contact Count" value={data.contactCount.toLocaleString()} label="Contact Count" icon={<Users size={20} style={{color: data.accentColor}} />} desc="Displays the total count of contacts as a single value." color={data.accentColor} />
              <MetricCardSmall title="Deal Count" value={data.dealCount.toLocaleString()} label="Deal Count" icon={<Briefcase size={20} style={{color: data.textColor}} />} desc="Number of deals (in all accounts)" color={data.textColor} />
              <MetricCardSmall title="Deals Value" value={`$${data.dealsValue.toLocaleString()}`} label="Value" icon={<TrendingUp size={20} style={{color: data.accentColor}} />} desc="Total value of all deals" color={data.accentColor} />
           </div>
 
           {/* Row 4: Comparison Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div id="pdf-comparison-charts" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
              <GrowthChart labels={data.growthLabels} contacts={data.growthContacts} deals={data.growthDeals} accentColor={data.accentColor} textColor={data.textColor} imageOverride={data.growthChartImage} />
              <DistributionChart contacts={data.contactCount} deals={data.dealCount} accentColor={data.accentColor} textColor={data.textColor} imageOverride={data.distributionChartImage} />
           </div>
 
           {/* Row 5: Deals Value List */}
-          <div className="report-card">
+          <div id="pdf-deals-value-list" className="report-card">
              <div className="flex justify-between items-center mb-6">
                 <h3 className="font-bold text-stone-900 text-sm uppercase tracking-wide">Deals value</h3>
                 <span className="text-[10px] font-bold text-stone-400 uppercase flex items-center gap-1">Value <TrendingUp size={10}/></span>
@@ -940,7 +929,7 @@ export default function App() {
           </div>
 
           {/* Row 6: Engagement Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div id="pdf-engagement-goals" className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="report-card">
               <h3 className="font-bold text-stone-900 mb-6 text-xs uppercase tracking-wide">Email Engagement Goals</h3>
               <div className="space-y-4">
@@ -961,14 +950,14 @@ export default function App() {
           </div>
 
           {/* Row 7: Major Engagement Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div id="pdf-email-metrics-row" className="grid grid-cols-1 md:grid-cols-3 gap-6">
              <MetricCardSmall title="Total Emails Sent" value={data.metricsEmailsSent.toLocaleString()} label="Emails Sent" icon={<Mail size={20} style={{color: data.accentColor}} />} color={data.accentColor} />
              <MetricCardSmall title="Opens" value={data.metricsOpens.toLocaleString()} label="Opens" icon={<ExternalLink size={20} style={{color: data.textColor}} />} color={data.textColor} />
              <MetricCardSmall title="Open Rate" value={data.metricsOpenRate} label="Open Rate" icon={<TrendingUp color={data.metricsOpenRate.startsWith('-') ? '#ef4444' : data.textColor} size={20}/>} color={data.cardColor}/>
           </div>
 
           {/* Row 8: Sent vs Opens Trend */}
-          <div className="report-card">
+          <div id="pdf-sent-opens-chart" className="report-card">
              <h3 className="font-bold text-stone-900 mb-6 text-xs uppercase tracking-wide">Sent vs. Opens</h3>
              <div className="min-h-[250px] flex items-center justify-center">
                 {data.sentOpensChartImage ? (
@@ -988,13 +977,13 @@ export default function App() {
           </div>
 
           {/* Click Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div id="pdf-link-stats" className="grid grid-cols-1 md:grid-cols-2 gap-6">
              <MetricCardSmall title="Link clicks" value={data.linkClicksTotal.toLocaleString()} label="Link Clicks" icon={<MousePointerClick size={20}/>} />
              <MetricCardSmall title="Link Click Rate" value={data.linkClickRateStr} label="Rate" icon={<Filter color={data.linkClickRateStr.startsWith('-') ? '#ef4444' : '#1e1b4b'} size={20}/>} />
           </div>
 
           {/* Funnel and Engagement Overlap */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div id="pdf-funnel-trend-row" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
              <FunnelDisplay sent={data.funnelSent} opened={data.funnelOpened} clicked={data.funnelClicked} accentColor={data.accentColor} textColor={data.textColor} imageOverride={data.funnelChartImage} />
              <div className="report-card lg:col-span-2">
                 <h3 className="font-bold text-stone-900 mb-6 text-xs uppercase tracking-wide">Sent/opened emails</h3>
@@ -1017,13 +1006,15 @@ export default function App() {
           </div>
 
           {/* Unsubcribes & Footer Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div id="pdf-footer-metrics" className="grid grid-cols-1 md:grid-cols-3 gap-6">
              <MetricCardSmall title="Unsubscribes" value={data.unsubscribes.toLocaleString()} label="Unsubscribes" icon={<LogOut size={20}/>} />
              <MetricCardSmall title="Unsubscribe Rate" value={data.unsubscribeRateStr} label="Rate" icon={<Users size={20}/>} />
              <MetricCardSmall title="Replies" value={data.repliesTotal.toLocaleString()} label="Replies" icon={<MessageSquare size={20}/>} />
           </div>
 
-          <EmailPerformanceTable rows={data.campaignsPerformance} />
+          <div id="pdf-performance-table">
+            <EmailPerformanceTable rows={data.campaignsPerformance} />
+          </div>
 
         </div>
       </main>
