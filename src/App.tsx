@@ -215,44 +215,151 @@ export default function App() {
     const element = reportRef.current;
     
     setIsLoading(true);
+    console.group("PDF Generation Diagnostic");
+    console.log("Start Time:", new Date().toLocaleTimeString());
+    console.log("Report Data State:", data);
+
+    // 1. Create a dedicated capture host
+    const captureHost = document.createElement('div');
+    captureHost.id = 'pdf-capture-active';
+    captureHost.style.position = 'absolute';
+    captureHost.style.left = '-9999px';
+    captureHost.style.top = '0';
+    captureHost.style.width = '1024px';
+    captureHost.style.backgroundColor = data.themeColor;
+    captureHost.style.color = data.textColor;
+    captureHost.style.fontFamily = fontFamilyMap[data.fontFamily];
+    
+    // Explicitly set theme variables so the clone inherits them correctly
+    const themeStyles = {
+      '--accent-color': data.accentColor,
+      '--card-bg': data.cardColor,
+      '--report-text': data.textColor,
+      '--h1-color': data.h1Color,
+      '--h2-color': data.h2Color,
+      '--h3-color': data.h3Color,
+      '--desc-color': data.descColor,
+      '--card-radius': borderRadiusMap[data.borderRadius]
+    };
+    
+    Object.entries(themeStyles).forEach(([key, value]) => {
+      captureHost.style.setProperty(key, value);
+    });
+
+    // 2. Clone the element and clean it up for capture
+    const clone = element.cloneNode(true) as HTMLElement;
+    clone.style.width = '1024px';
+    clone.style.maxWidth = '1024px';
+    clone.style.margin = '0';
+    clone.style.padding = '40px';
+    clone.style.boxSizing = 'border-box';
+    clone.style.backgroundColor = 'transparent';
+    clone.style.overflow = 'visible';
+    
+    // Remove any interactive UI elements from the clone for a cleaner print
+    const buttons = clone.querySelectorAll('button');
+    buttons.forEach(btn => btn.remove());
+
+    captureHost.appendChild(clone);
+    document.body.appendChild(captureHost);
+
+    // CRITICAL: Synchronize canvases - clones are blank by default
+    const originalCanvases = element.querySelectorAll('canvas');
+    const clonedCanvases = clone.querySelectorAll('canvas');
+    originalCanvases.forEach((orig, i) => {
+      const target = clonedCanvases[i] as HTMLCanvasElement;
+      if (target) {
+        target.width = orig.width;
+        target.height = orig.height;
+        const ctx = target.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(orig, 0, 0);
+        }
+      }
+    });
+
     try {
-      // Use html2canvas for absolute layout fidelity (prevents shifting/misalignment)
-      // We use a high scale (4) to ensure text remains crisp and zoomable
-      const canvas = await html2canvas(element, {
-        scale: 4,
+      // 3. Robust wait for rendering (Fonts, Charts, Images)
+      console.log("Waiting for assets to load in clone...");
+      const images = Array.from(clone.getElementsByTagName('img'));
+      await Promise.all(images.map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = () => {
+            console.warn("Failed to load image in clone:", img.src);
+            resolve(null);
+          };
+        });
+      }));
+
+      // Extra delay for Recharts animations to finish fully
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      console.log("Commencing html2canvas capture...");
+      const canvas = await html2canvas(captureHost, {
+        scale: 2, // 2x for better clarity
         useCORS: true,
+        allowTaint: true,
         backgroundColor: data.themeColor,
-        logging: false,
-        width: 1000, // Fixed width capture for consistency
+        width: 1024,
+        windowWidth: 1024,
+        logging: true,
         onclone: (clonedDoc) => {
-          // Ensure cloned document state is correct
-          const el = clonedDoc.querySelector('[ref="reportRef"]') as HTMLElement;
-          if (el) el.style.backgroundColor = 'transparent';
+          const host = clonedDoc.getElementById('pdf-capture-active');
+          if (host) {
+            host.style.position = 'relative';
+            host.style.left = '0';
+          }
         }
       });
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdfWidth = 210; // A4 width in mm
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      console.log("Canvas captured. Dimensions:", canvas.width, "x", canvas.height);
       
+      if (canvas.width === 0 || canvas.height === 0) {
+        throw new Error("Captured canvas is empty (0 height/width). Check if content is visible.");
+      }
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF({
         orientation: 'p',
         unit: 'mm',
-        format: [pdfWidth, pdfHeight],
+        format: 'a4',
         compress: true
       });
 
-      // Add high-resolution image
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       
-      // If user wants selectable text, we can try to overlay it, but visual fidelity is priority.
-      // This image approach currently solves the shifting/alignment/graph size issues.
-      
-      pdf.save(`Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`);
+      // Multi-page logic
+      let heightLeft = pdfHeight;
+      let position = 0;
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      console.log("Building PDF pages. Calculated tall height (mm):", pdfHeight);
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - pdfHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const fileName = `Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+      pdf.save(fileName);
+      console.log("PDF download triggered:", fileName);
     } catch (err) {
-      console.error("PDF generation failed", err);
-      alert("Failed to generate PDF. Layout might be too complex for browser capture.");
+      console.error("PDF generation failed:", err);
+      alert("Failed to generate PDF. Error details in console.");
     } finally {
+      if (document.body.contains(captureHost)) {
+        document.body.removeChild(captureHost);
+        console.log("Capture host cleaned up");
+      }
+      console.groupEnd();
       setIsLoading(false);
     }
   };
@@ -311,12 +418,29 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden relative" style={{ backgroundColor: data.themeColor }}>
+      {/* Top bar for mobile/desktop layout control */}
+      {!isViewerMode && (
+        <header className="fixed top-0 left-0 right-0 h-14 border-b border-stone-800 bg-stone-950/80 backdrop-blur-xl flex items-center justify-between px-4 z-50 md:hidden">
+          <div className="flex items-center gap-2">
+             <div className="w-8 h-8 bg-mustard rounded-lg flex items-center justify-center text-stone-900"><Mail size={16} /></div>
+             <p className="text-xs font-black uppercase tracking-tighter text-white">MailDash</p>
+          </div>
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+            className="w-10 h-10 rounded-lg bg-stone-900 flex items-center justify-center text-mustard border border-stone-800"
+          >
+            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </header>
+      )}
+
       {/* Sidebar - Control Panel */}
       <aside 
         id="sidebar-editor" 
         className={cn(
-          "w-full md:w-[380px] bg-stone-900 text-white overflow-y-auto border-r border-stone-800 p-6 space-y-6 scrollbar-thin transition-all duration-300 fixed md:relative z-40 h-full",
-          !isSidebarOpen || isViewerMode ? "-translate-x-full md:hidden" : "translate-x-0"
+          "w-full md:w-[400px] bg-stone-900 text-white overflow-y-auto border-r border-stone-800 p-6 space-y-6 scrollbar-thin transition-all duration-300 fixed md:relative z-40 h-full pt-20 md:pt-6 shadow-2xl",
+          (!isSidebarOpen && !isViewerMode) ? "-translate-x-full md:hidden" : 
+          (isViewerMode ? "-translate-x-full lg:hidden" : "translate-x-0")
         )}
       >
         <div className="flex items-center gap-3 p-4 rounded-xl border border-stone-700" style={{ backgroundColor: 'rgba(41, 37, 36, 0.5)' }}>
@@ -741,7 +865,7 @@ export default function App() {
       </aside>
 
       {/* Main Preview Area */}
-      <main className="flex-1 overflow-y-auto px-4 py-8 md:px-12 scroll-smooth pb-40 relative">
+      <main className="flex-1 overflow-y-auto px-4 pt-20 pb-40 md:py-8 md:px-12 scroll-smooth relative">
         {/* Mobile Sidebar Toggle */}
         {!isViewerMode && (
           <button 
@@ -765,6 +889,7 @@ export default function App() {
         {isViewerMode && <div className="h-8" />}
         <div 
           ref={reportRef} 
+          id="report-preview-area"
           className="max-w-[1000px] mx-auto space-y-8 bg-transparent"
           style={{
             '--accent-color': data.accentColor,
