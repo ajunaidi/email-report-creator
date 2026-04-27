@@ -8,7 +8,8 @@ import {
   query,
   where,
   getDocs,
-  Timestamp
+  Timestamp,
+  writeBatch
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { ReportData } from '../types';
@@ -23,30 +24,66 @@ export interface ReportDocument {
   updatedAt: Timestamp;
 }
 
+const IMAGE_KEYS = [
+  'growthChartImage',
+  'distributionChartImage',
+  'sentOpensChartImage',
+  'funnelChartImage',
+  'engagementTrendChartImage',
+  'clientLogo'
+] as const;
+
 export const saveReport = async (reportId: string | null, data: ReportData) => {
   if (!auth.currentUser) throw new Error('User not authenticated');
 
   const userId = auth.currentUser.uid;
+  
+  // Extract images to subcollection if they are large correctly
+  const imagesToSave: Record<string, string> = {};
+  const cleanedData = { ...data };
+
+  IMAGE_KEYS.forEach(key => {
+    const val = cleanedData[key];
+    if (val && typeof val === 'string' && val.startsWith('data:image')) {
+      imagesToSave[key] = val;
+      // Use a marker so we know it's stored in DB
+      (cleanedData as any)[key] = `__DB_ASSET:${key}__`;
+    }
+  });
+
   const reportData = {
     userId,
     reportTitle: data.reportTitle,
     datePeriod: data.datePeriod,
-    data: data,
+    data: cleanedData,
     updatedAt: serverTimestamp(),
   };
 
-  if (reportId) {
-    const reportRef = doc(db, 'reports', reportId);
+  let id = reportId;
+
+  if (id) {
+    const reportRef = doc(db, 'reports', id);
     await setDoc(reportRef, reportData, { merge: true });
-    return reportId;
   } else {
     const reportsRef = collection(db, 'reports');
     const docRef = await addDoc(reportsRef, {
       ...reportData,
       createdAt: serverTimestamp(),
     });
-    return docRef.id;
+    id = docRef.id;
   }
+
+  // Save assets
+  if (id && Object.keys(imagesToSave).length > 0) {
+    const batch = writeBatch(db);
+    for (const [key, value] of Object.entries(imagesToSave)) {
+      const assetRef = doc(db, 'reports', id, 'assets', key);
+      batch.set(assetRef, { data: value, updatedAt: serverTimestamp() });
+    }
+    await batch.commit();
+  }
+
+  return id;
 };
 
 export const getReport = async (reportId: string): Promise<ReportDocument | null> => {
@@ -54,7 +91,21 @@ export const getReport = async (reportId: string): Promise<ReportDocument | null
   const docSnap = await getDoc(docRef);
 
   if (docSnap.exists()) {
-    return { id: docSnap.id, ...docSnap.data() } as ReportDocument;
+    const reportDoc = { id: docSnap.id, ...docSnap.data() } as ReportDocument;
+    
+    // Fetch assets
+    const assetsRef = collection(db, 'reports', reportId, 'assets');
+    const assetsSnap = await getDocs(assetsRef);
+    
+    assetsSnap.forEach(assetDoc => {
+      const key = assetDoc.id;
+      const assetData = assetDoc.data();
+      if (assetData.data) {
+        (reportDoc.data as any)[key] = assetData.data;
+      }
+    });
+
+    return reportDoc;
   }
   return null;
 };

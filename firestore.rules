@@ -20,6 +20,11 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if isOwner(resource.data.userId);
       allow delete: if isOwner(resource.data.userId);
+
+      match /assets/{assetId} {
+        allow read: if true;
+        allow write: if isOwner(get(/databases/$(database)/documents/reports/$(reportId)).data.userId);
+      }
     }
 
     // Default deny

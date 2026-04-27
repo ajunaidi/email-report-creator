@@ -91,6 +91,12 @@ export interface ReportData {
   campaignsPerformance: CampaignPerformanceRow[];
 
   // Customization
+  growthChartImage?: string;
+  distributionChartImage?: string;
+  sentOpensChartImage?: string;
+  funnelChartImage?: string;
+  engagementTrendChartImage?: string;
+  
   clientLogo?: string;
   themeColor: string; // Background color
   accentColor: string;

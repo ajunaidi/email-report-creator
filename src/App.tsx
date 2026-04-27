@@ -12,6 +12,7 @@ import {
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { cn } from './lib/utils';
+import { compressImage } from './lib/imageUtils';
 import { ReportData, CampaignPerformanceRow } from './types';
 import { MOCK_FULL_DATA } from './mockData';
 import { ReportHeader } from './components/ReportHeader';
@@ -104,6 +105,13 @@ export default function App() {
   const debouncedSave = useCallback(
     debounce(async (currentData: ReportData, currentId: string | null, currentUser: User | null) => {
       if (!currentUser) return;
+      
+      // Check document size estimate (1MB limit)
+      const dataSize = JSON.stringify(currentData).length;
+      if (dataSize > 900000) {
+        console.warn(`Report data size (${dataSize} bytes) is approaching Firestore 1MB limit.`);
+      }
+
       setIsSaving(true);
       try {
         const id = await saveReport(currentId, currentData);
@@ -112,7 +120,10 @@ export default function App() {
           const newUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?reportId=${id}`;
           window.history.pushState({ path: newUrl }, '', newUrl);
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err.message?.includes('exceeds the maximum allowed size')) {
+          alert("Document too large! Try reducing image sizes or removing some images.");
+        }
         console.error("Auto-save failed", err);
       } finally {
         setIsSaving(false);
@@ -203,101 +214,46 @@ export default function App() {
     if (!reportRef.current) return;
     const element = reportRef.current;
     
-    // Create a styled clone for PDF capture
-    const captureWrapper = document.createElement('div');
-    captureWrapper.id = 'pdf-capture-wrapper';
-    captureWrapper.style.backgroundColor = data.themeColor;
-    captureWrapper.style.padding = '0'; // Remove padding that causes excess space
-    captureWrapper.style.width = '1000px'; // Exact width of the report
-    captureWrapper.style.position = 'fixed';
-    captureWrapper.style.top = '-10000px'; 
-    captureWrapper.style.left = '-10000px';
-    captureWrapper.style.fontFamily = fontFamilyMap[data.fontFamily];
-    
-    // Set all theme variables explicitly
-    captureWrapper.style.setProperty('--accent-color', data.accentColor);
-    captureWrapper.style.setProperty('--card-bg', data.cardColor);
-    captureWrapper.style.setProperty('--report-text', data.textColor);
-    captureWrapper.style.setProperty('--h1-color', data.h1Color);
-    captureWrapper.style.setProperty('--h2-color', data.h2Color);
-    captureWrapper.style.setProperty('--h3-color', data.h3Color);
-    captureWrapper.style.setProperty('--desc-color', data.descColor);
-    captureWrapper.style.setProperty('--card-radius', borderRadiusMap[data.borderRadius]);
-    
-    // Deep clone the element 
-    const clone = element.cloneNode(true) as HTMLElement;
-    captureWrapper.appendChild(clone);
-    document.body.appendChild(captureWrapper);
-
-    // CRITICAL: Copy canvas content AND styles from original to clone
-    const originalCanvases = element.querySelectorAll('canvas');
-    const clonedCanvases = clone.querySelectorAll('canvas');
-    
-    originalCanvases.forEach((originalCanvas, index) => {
-      const clonedCanvas = clonedCanvases[index] as HTMLCanvasElement;
-      if (clonedCanvas) {
-        // Force the clone to match the exact size of the original
-        clonedCanvas.width = originalCanvas.width;
-        clonedCanvas.height = originalCanvas.height;
-        clonedCanvas.style.width = originalCanvas.style.width;
-        clonedCanvas.style.height = originalCanvas.style.height;
-        const destCtx = clonedCanvas.getContext('2d');
-        if (destCtx) {
-          destCtx.drawImage(originalCanvas, 0, 0);
-        }
-      }
-    });
-
+    setIsLoading(true);
     try {
-      // Wait for layout to stabilize
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const canvas = await html2canvas(captureWrapper, {
-        scale: 2.5,
+      // Use html2canvas for absolute layout fidelity (prevents shifting/misalignment)
+      // We use a high scale (4) to ensure text remains crisp and zoomable
+      const canvas = await html2canvas(element, {
+        scale: 4,
         useCORS: true,
         backgroundColor: data.themeColor,
-        width: 1000, 
         logging: false,
+        width: 1000, // Fixed width capture for consistency
         onclone: (clonedDoc) => {
-          const wrapper = clonedDoc.getElementById('pdf-capture-wrapper');
-          if (wrapper) {
-            wrapper.style.top = '0';
-            wrapper.style.left = '0';
-            wrapper.style.position = 'relative';
-            wrapper.style.margin = '0';
-            
-            const innerReport = wrapper.firstChild as HTMLElement;
-            if (innerReport) {
-               // Force exact container dimensions to prevent text shifting
-               innerReport.style.margin = '0';
-               innerReport.style.width = '1000px';
-               innerReport.style.maxWidth = '1000px';
-               innerReport.style.padding = '40px'; // Add consistent internal padding
-               innerReport.style.boxSizing = 'border-box';
-               
-               // Ensure tables don't scroll/compress
-               innerReport.querySelectorAll('.overflow-x-auto').forEach((el: any) => {
-                 el.style.overflow = 'visible';
-                 el.style.width = '100%';
-               });
-            }
-          }
+          // Ensure cloned document state is correct
+          const el = clonedDoc.querySelector('[ref="reportRef"]') as HTMLElement;
+          if (el) el.style.backgroundColor = 'transparent';
         }
       });
-      
+
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      
-      const pdfWidth = 210; // A4 Width in mm
+      const pdfWidth = 210; // A4 width in mm
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
-      const pdf = new jsPDF('p', 'mm', [pdfWidth, pdfHeight]);
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: [pdfWidth, pdfHeight],
+        compress: true
+      });
+
+      // Add high-resolution image
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      
+      // If user wants selectable text, we can try to overlay it, but visual fidelity is priority.
+      // This image approach currently solves the shifting/alignment/graph size issues.
       
       pdf.save(`Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`);
     } catch (err) {
       console.error("PDF generation failed", err);
+      alert("Failed to generate PDF. Layout might be too complex for browser capture.");
     } finally {
-      document.body.removeChild(captureWrapper);
+      setIsLoading(false);
     }
   };
 
@@ -305,8 +261,9 @@ export default function App() {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setData({ ...data, clientLogo: reader.result as string });
+      reader.onloadend = async () => {
+        const compressed = await compressImage(reader.result as string, 400, 400, 0.8);
+        setData({ ...data, clientLogo: compressed });
       };
       reader.readAsDataURL(file);
     }
@@ -547,6 +504,17 @@ export default function App() {
                   </button>
                 </div>
               )}
+        </Section>
+
+        <Section label="Chart Image Replacements" icon={<Image size={14} />}>
+           <p className="text-[9px] text-stone-500 mb-3 uppercase font-black px-1 tracking-tighter">Replace dynamic charts with static images</p>
+           <div className="space-y-4">
+             <ImageUploader label="Growth Chart" value={data.growthChartImage} onUpload={(url) => setData({...data, growthChartImage: url})} onClear={() => setData({...data, growthChartImage: ""})} />
+             <ImageUploader label="Distribution Chart" value={data.distributionChartImage} onUpload={(url) => setData({...data, distributionChartImage: url})} onClear={() => setData({...data, distributionChartImage: ""})} />
+             <ImageUploader label="Sent vs Opens Chart" value={data.sentOpensChartImage} onUpload={(url) => setData({...data, sentOpensChartImage: url})} onClear={() => setData({...data, sentOpensChartImage: ""})} />
+             <ImageUploader label="Funnel Chart" value={data.funnelChartImage} onUpload={(url) => setData({...data, funnelChartImage: url})} onClear={() => setData({...data, funnelChartImage: ""})} />
+             <ImageUploader label="Engagement Trend Chart" value={data.engagementTrendChartImage} onUpload={(url) => setData({...data, engagementTrendChartImage: url})} onClear={() => setData({...data, engagementTrendChartImage: ""})} />
+           </div>
         </Section>
 
         <Section label="1. Project Basics" icon={<Settings2 size={14} />}>
@@ -793,22 +761,8 @@ export default function App() {
           </div>
         )}
 
-        {isViewerMode && !isLoading && (
-          <div className="max-w-[1000px] mx-auto mb-8 flex items-center justify-between gap-4 p-4 rounded-2xl bg-stone-900/40 backdrop-blur-md shadow-2xl border border-stone-700/50">
-             <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-mustard rounded-lg flex items-center justify-center text-stone-900"><Mail size={16} /></div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-white">Preview Content</p>
-             </div>
-             <div className="flex gap-2">
-                <button onClick={handleDownloadPDF} className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white rounded-lg text-[10px] font-bold uppercase tracking-tight hover:bg-white/20 transition-all border border-white/10">
-                    <FileText size={14} /> PDF
-                </button>
-                <button onClick={handleDownloadHTML} className="flex items-center gap-2 px-4 py-2 bg-mustard text-stone-900 rounded-lg text-[10px] font-bold uppercase tracking-tight hover:opacity-90 transition-all">
-                    <Download size={14} /> HTML
-                </button>
-             </div>
-          </div>
-        )}
+        {/* Empty state for clean viewer mode spacing */}
+        {isViewerMode && <div className="h-8" />}
         <div 
           ref={reportRef} 
           className="max-w-[1000px] mx-auto space-y-8 bg-transparent"
@@ -860,8 +814,8 @@ export default function App() {
 
           {/* Row 4: Comparison Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-             <GrowthChart labels={data.growthLabels} contacts={data.growthContacts} deals={data.growthDeals} accentColor={data.accentColor} textColor={data.textColor} />
-             <DistributionChart contacts={data.contactCount} deals={data.dealCount} accentColor={data.accentColor} textColor={data.textColor} />
+             <GrowthChart labels={data.growthLabels} contacts={data.growthContacts} deals={data.growthDeals} accentColor={data.accentColor} textColor={data.textColor} imageOverride={data.growthChartImage} />
+             <DistributionChart contacts={data.contactCount} deals={data.dealCount} accentColor={data.accentColor} textColor={data.textColor} imageOverride={data.distributionChartImage} />
           </div>
 
           {/* Row 5: Deals Value List */}
@@ -911,14 +865,20 @@ export default function App() {
           {/* Row 8: Sent vs Opens Trend */}
           <div className="report-card">
              <h3 className="font-bold text-stone-900 mb-6 text-xs uppercase tracking-wide">Sent vs. Opens</h3>
-             <div className="h-[250px]">
-                <Line data={{
-                  labels: data.growthLabels,
-                  datasets: [
-                    { label: 'Sent', data: data.sentTrend, borderColor: '#1e1b4b', backgroundColor: 'transparent', tension: 0.1, borderWidth: 2 },
-                    { label: 'Opens', data: data.opensTrend, borderColor: '#ef4444', backgroundColor: 'transparent', tension: 0.1, borderWidth: 2 },
-                  ]
-                }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
+             <div className="min-h-[250px] flex items-center justify-center">
+                {data.sentOpensChartImage ? (
+                  <img src={data.sentOpensChartImage} className="max-h-[300px] w-full object-contain rounded-lg" alt="Sent vs Opens Override" />
+                ) : (
+                  <div className="h-[250px] w-full">
+                    <Line data={{
+                      labels: data.growthLabels,
+                      datasets: [
+                        { label: 'Sent', data: data.sentTrend, borderColor: '#1e1b4b', backgroundColor: 'transparent', tension: 0.1, borderWidth: 2 },
+                        { label: 'Opens', data: data.opensTrend, borderColor: '#ef4444', backgroundColor: 'transparent', tension: 0.1, borderWidth: 2 },
+                      ]
+                    }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
+                  </div>
+                )}
              </div>
           </div>
 
@@ -930,17 +890,23 @@ export default function App() {
 
           {/* Funnel and Engagement Overlap */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-             <FunnelDisplay sent={data.funnelSent} opened={data.funnelOpened} clicked={data.funnelClicked} accentColor={data.accentColor} textColor={data.textColor} />
+             <FunnelDisplay sent={data.funnelSent} opened={data.funnelOpened} clicked={data.funnelClicked} accentColor={data.accentColor} textColor={data.textColor} imageOverride={data.funnelChartImage} />
              <div className="report-card lg:col-span-2">
                 <h3 className="font-bold text-stone-900 mb-6 text-xs uppercase tracking-wide">Sent/opened emails</h3>
-                <div className="h-[280px]">
-                   <Line data={{
-                     labels: data.growthLabels,
-                     datasets: [
-                       { label: 'Total Opens', data: data.engagementOpensTrend, borderColor: '#ef4444', backgroundColor: 'transparent', tension: 0.3 },
-                       { label: 'Total Link Clicks', data: data.engagementClicksTrend, borderColor: '#1e1b4b', backgroundColor: 'transparent', tension: 0.3 },
-                     ]
-                   }} options={{ responsive: true, maintainAspectRatio: false }} />
+                <div className="min-h-[280px] flex items-center justify-center">
+                   {data.engagementTrendChartImage ? (
+                     <img src={data.engagementTrendChartImage} className="max-h-[300px] w-full object-contain rounded-lg" alt="Engagement Trend Override" />
+                   ) : (
+                     <div className="h-[280px] w-full">
+                        <Line data={{
+                          labels: data.growthLabels,
+                          datasets: [
+                            { label: 'Total Opens', data: data.engagementOpensTrend, borderColor: '#ef4444', backgroundColor: 'transparent', tension: 0.3 },
+                            { label: 'Total Link Clicks', data: data.engagementClicksTrend, borderColor: '#1e1b4b', backgroundColor: 'transparent', tension: 0.3 },
+                          ]
+                        }} options={{ responsive: true, maintainAspectRatio: false }} />
+                     </div>
+                   )}
                 </div>
              </div>
           </div>
@@ -1001,6 +967,43 @@ function MetricRow({ icon, label, val }: any) {
     <div className="flex items-center justify-between text-xs font-bold border-b border-stone-50 pb-2">
        <div className="flex items-center gap-2 text-stone-500">{icon} {label}</div>
        <span className="text-stone-800">{val.toLocaleString()}</span>
+    </div>
+  );
+}
+
+function ImageUploader({ label, value, onUpload, onClear }: { label: string, value?: string, onUpload: (url: string) => void, onClear: () => void }) {
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const compressed = await compressImage(reader.result as string, 800, 800, 0.6);
+        onUpload(compressed);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-[9px] font-black text-stone-600 uppercase tracking-tighter">{label}</label>
+      {value ? (
+        <div className="relative group w-full bg-stone-950 rounded-lg p-2 border border-stone-800">
+          <img src={value} className="h-20 w-full object-contain mx-auto" />
+          <button 
+            onClick={onClear}
+            className="absolute top-1 right-1 bg-red-600 rounded-full p-1 shadow-lg hover:bg-red-700 transition-all border border-stone-900"
+          >
+            <Trash2 size={10} className="text-white" />
+          </button>
+        </div>
+      ) : (
+        <label className="flex items-center justify-center gap-2 cursor-pointer bg-stone-800 border border-stone-700 rounded-lg h-10 hover:bg-stone-700 transition-all group">
+          <Plus size={14} className="text-stone-500 group-hover:text-mustard" />
+          <span className="text-[10px] text-stone-400 font-bold uppercase">Upload Chart Image</span>
+          <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
+        </label>
+      )}
     </div>
   );
 }
