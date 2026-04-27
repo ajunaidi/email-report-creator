@@ -215,117 +215,103 @@ export default function App() {
     const element = reportRef.current;
     
     setIsLoading(true);
-    console.group("PDF Generation Diagnostic");
     
-    const themeStyles = {
-      '--accent-color': data.accentColor,
-      '--card-bg': data.cardColor,
-      '--report-text': data.textColor,
-      '--h1-color': data.h1Color,
-      '--h2-color': data.h2Color,
-      '--h3-color': data.h3Color,
-      '--desc-color': data.descColor,
-      '--card-radius': borderRadiusMap[data.borderRadius]
-    };
-
+    const originalStyle = element.getAttribute('style') || '';
+    
     try {
+      // Create a capture host to avoid flickering or scrolling issues
+      const captureHost = document.createElement('div');
+      captureHost.style.position = 'fixed';
+      captureHost.style.left = '-9999px';
+      captureHost.style.top = '0';
+      captureHost.style.width = '1000px'; // Match max-w-[1000px]
+      captureHost.style.backgroundColor = data.themeColor;
+      captureHost.style.fontFamily = fontFamilyMap[data.fontFamily];
+      
+      const themeStyles = {
+        '--accent-color': data.accentColor,
+        '--card-bg': data.cardColor,
+        '--report-text': data.textColor,
+        '--h1-color': data.h1Color,
+        '--h2-color': data.h2Color,
+        '--h3-color': data.h3Color,
+        '--desc-color': data.descColor,
+        '--card-radius': borderRadiusMap[data.borderRadius]
+      };
+      
+      Object.entries(themeStyles).forEach(([key, value]) => {
+        captureHost.style.setProperty(key, value);
+      });
+
+      const clone = element.cloneNode(true) as HTMLElement;
+      clone.style.width = '1000px';
+      clone.style.maxWidth = '1000px';
+      clone.style.margin = '0';
+      clone.style.padding = '40px';
+      clone.style.boxSizing = 'border-box';
+      
+      // Remove editing UI from clone
+      clone.querySelectorAll('button').forEach(btn => btn.remove());
+      
+      captureHost.appendChild(clone);
+      document.body.appendChild(captureHost);
+
+      // Sync chart canvases
+      const originalCanvases = element.querySelectorAll('canvas');
+      const clonedCanvases = clone.querySelectorAll('canvas');
+      originalCanvases.forEach((orig, i) => {
+        const target = clonedCanvases[i] as HTMLCanvasElement;
+        if (target) {
+          target.width = orig.width;
+          target.height = orig.height;
+          target.getContext('2d')?.drawImage(orig, 0, 0);
+        }
+      });
+
+      // Wait for images
+      const images = Array.from(clone.getElementsByTagName('img'));
+      await Promise.all(images.map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = () => resolve(null);
+        });
+      }));
+
+      // Small delay for final render
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const canvas = await html2canvas(captureHost, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: data.themeColor,
+        width: 1000,
+        windowWidth: 1000,
+        logging: false
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const imgWidth = 210; // A4 width basis
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
       const pdf = new jsPDF({
         orientation: 'p',
         unit: 'mm',
-        format: 'a3',
+        format: [imgWidth, imgHeight], // Single long page matching content
         compress: true
       });
 
-      const pageWidth = 297; // A3 width mm
-      const captureWidth = 1200; // Optimal width for A3 resolution
-
-      const capturePage = async (selectors: string[], pageNum: number) => {
-        const pageHost = document.createElement('div');
-        pageHost.style.width = `${captureWidth}px`;
-        pageHost.style.padding = '80px';
-        pageHost.style.backgroundColor = data.themeColor;
-        pageHost.style.color = data.textColor;
-        pageHost.style.boxSizing = 'border-box';
-        pageHost.style.fontFamily = fontFamilyMap[data.fontFamily];
-        
-        Object.entries(themeStyles).forEach(([key, value]) => {
-          pageHost.style.setProperty(key, value);
-        });
-
-        selectors.forEach(selector => {
-          const original = element.querySelector(selector);
-          if (original) {
-            const clone = original.cloneNode(true) as HTMLElement;
-            clone.style.marginBottom = '60px';
-            clone.style.width = '1040px';
-            clone.style.maxWidth = '1040px';
-            clone.style.margin = '0 auto 60px auto';
-            clone.style.boxSizing = 'border-box';
-            
-            // Clean up
-            clone.querySelectorAll('button').forEach(b => b.remove());
-            
-            // Baseline fixes for table text
-            clone.querySelectorAll('span, p, div').forEach(el => {
-              (el as HTMLElement).style.paddingBottom = '2px';
-            });
-
-            // Canvas Sync
-            const originalCanvases = original.querySelectorAll('canvas');
-            const clonedCanvases = clone.querySelectorAll('canvas');
-            originalCanvases.forEach((orig, i) => {
-              const target = clonedCanvases[i] as HTMLCanvasElement;
-              if (target) {
-                target.width = orig.width;
-                target.height = orig.height;
-                target.getContext('2d')?.drawImage(orig, 0, 0);
-              }
-            });
-
-            pageHost.appendChild(clone);
-          }
-        });
-
-        document.body.appendChild(pageHost);
-
-        const canvas = await html2canvas(pageHost, {
-          scale: 1.5,
-          useCORS: true,
-          backgroundColor: data.themeColor,
-          width: captureWidth,
-          windowWidth: captureWidth,
-          logging: false
-        });
-
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        const imgHeightInPdf = (canvas.height * pageWidth) / canvas.width;
-
-        if (pageNum > 1) pdf.addPage('a3');
-        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, imgHeightInPdf);
-        
-        document.body.removeChild(pageHost);
-      };
-
-      // PAGE 1: Header, Goals, Summary, Key Metrics
-      await capturePage(['#pdf-header', '#pdf-goals-summary', '#pdf-main-summary', '#pdf-key-metrics'], 1);
-
-      // PAGE 2: Comparison Charts, Deals Value List
-      await capturePage(['#pdf-comparison-charts', '#pdf-deals-value-list'], 2);
-
-      // PAGE 3: Email Engagement Goals, Metrics Row, Trend Chart
-      await capturePage(['#pdf-engagement-goals', '#pdf-email-metrics-row', '#pdf-sent-opens-chart'], 3);
-
-      // PAGE 4: Link Rates, Funnel/Trend row, Footer Metrics, Performance Table
-      await capturePage(['#pdf-link-stats', '#pdf-funnel-trend-row', '#pdf-footer-metrics', '#pdf-performance-table'], 4);
-
+      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+      
       const fileName = `Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
       pdf.save(fileName);
+      
+      document.body.removeChild(captureHost);
     } catch (err) {
       console.error("PDF generation failed:", err);
-      alert("Failed to generate PDF. Error details in console.");
+      alert("Failed to generate PDF. Check console for details.");
     } finally {
       setIsLoading(false);
-      console.groupEnd();
     }
   };
 
@@ -869,12 +855,10 @@ export default function App() {
           } as React.CSSProperties}
         >
           
-          <div id="pdf-header">
-            <ReportHeader title={data.reportTitle} date={data.datePeriod} activeTab="General" logo={data.clientLogo} />
-          </div>
+          <ReportHeader title={data.reportTitle} date={data.datePeriod} activeTab="General" logo={data.clientLogo} />
 
           {/* Row 1: Goals */}
-          <div id="pdf-goals-summary" className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <GoalTracker 
               title="Deals and Conversion Goals"
               label1="Contact Count" val1={data.conversionCount} max1={data.conversionGoal} color1={data.accentColor}
@@ -895,25 +879,23 @@ export default function App() {
             </div>
           </div>
 
-          <div id="pdf-main-summary">
-            <SummarySection summary={data.summary} recommendations={data.recommendations} />
-          </div>
+          <SummarySection summary={data.summary} recommendations={data.recommendations} />
 
           {/* Row 3: Metrics */}
-          <div id="pdf-key-metrics" className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
              <MetricCardSmall title="Contact Count" value={data.contactCount.toLocaleString()} label="Contact Count" icon={<Users size={20} style={{color: data.accentColor}} />} desc="Displays the total count of contacts as a single value." color={data.accentColor} />
              <MetricCardSmall title="Deal Count" value={data.dealCount.toLocaleString()} label="Deal Count" icon={<Briefcase size={20} style={{color: data.textColor}} />} desc="Number of deals (in all accounts)" color={data.textColor} />
              <MetricCardSmall title="Deals Value" value={`$${data.dealsValue.toLocaleString()}`} label="Value" icon={<TrendingUp size={20} style={{color: data.accentColor}} />} desc="Total value of all deals" color={data.accentColor} />
           </div>
 
           {/* Row 4: Comparison Charts */}
-          <div id="pdf-comparison-charts" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
              <GrowthChart labels={data.growthLabels} contacts={data.growthContacts} deals={data.growthDeals} accentColor={data.accentColor} textColor={data.textColor} imageOverride={data.growthChartImage} />
              <DistributionChart contacts={data.contactCount} deals={data.dealCount} accentColor={data.accentColor} textColor={data.textColor} imageOverride={data.distributionChartImage} />
           </div>
 
           {/* Row 5: Deals Value List */}
-          <div id="pdf-deals-value-list" className="report-card">
+          <div className="report-card">
              <div className="flex justify-between items-center mb-6">
                 <h3 className="font-bold text-stone-900 text-sm uppercase tracking-wide">Deals value</h3>
                 <span className="text-[10px] font-bold text-stone-400 uppercase flex items-center gap-1">Value <TrendingUp size={10}/></span>
@@ -929,7 +911,7 @@ export default function App() {
           </div>
 
           {/* Row 6: Engagement Summary */}
-          <div id="pdf-engagement-goals" className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="report-card">
               <h3 className="font-bold text-stone-900 mb-6 text-xs uppercase tracking-wide">Email Engagement Goals</h3>
               <div className="space-y-4">
@@ -950,14 +932,14 @@ export default function App() {
           </div>
 
           {/* Row 7: Major Engagement Cards */}
-          <div id="pdf-email-metrics-row" className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
              <MetricCardSmall title="Total Emails Sent" value={data.metricsEmailsSent.toLocaleString()} label="Emails Sent" icon={<Mail size={20} style={{color: data.accentColor}} />} color={data.accentColor} />
              <MetricCardSmall title="Opens" value={data.metricsOpens.toLocaleString()} label="Opens" icon={<ExternalLink size={20} style={{color: data.textColor}} />} color={data.textColor} />
              <MetricCardSmall title="Open Rate" value={data.metricsOpenRate} label="Open Rate" icon={<TrendingUp color={data.metricsOpenRate.startsWith('-') ? '#ef4444' : data.textColor} size={20}/>} color={data.cardColor}/>
           </div>
 
           {/* Row 8: Sent vs Opens Trend */}
-          <div id="pdf-sent-opens-chart" className="report-card">
+          <div className="report-card">
              <h3 className="font-bold text-stone-900 mb-6 text-xs uppercase tracking-wide">Sent vs. Opens</h3>
              <div className="min-h-[250px] flex items-center justify-center">
                 {data.sentOpensChartImage ? (
@@ -977,13 +959,13 @@ export default function App() {
           </div>
 
           {/* Click Stats */}
-          <div id="pdf-link-stats" className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
              <MetricCardSmall title="Link clicks" value={data.linkClicksTotal.toLocaleString()} label="Link Clicks" icon={<MousePointerClick size={20}/>} />
              <MetricCardSmall title="Link Click Rate" value={data.linkClickRateStr} label="Rate" icon={<Filter color={data.linkClickRateStr.startsWith('-') ? '#ef4444' : '#1e1b4b'} size={20}/>} />
           </div>
 
           {/* Funnel and Engagement Overlap */}
-          <div id="pdf-funnel-trend-row" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
              <FunnelDisplay sent={data.funnelSent} opened={data.funnelOpened} clicked={data.funnelClicked} accentColor={data.accentColor} textColor={data.textColor} imageOverride={data.funnelChartImage} />
              <div className="report-card lg:col-span-2">
                 <h3 className="font-bold text-stone-900 mb-6 text-xs uppercase tracking-wide">Sent/opened emails</h3>
@@ -1006,15 +988,13 @@ export default function App() {
           </div>
 
           {/* Unsubcribes & Footer Metrics */}
-          <div id="pdf-footer-metrics" className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
              <MetricCardSmall title="Unsubscribes" value={data.unsubscribes.toLocaleString()} label="Unsubscribes" icon={<LogOut size={20}/>} />
              <MetricCardSmall title="Unsubscribe Rate" value={data.unsubscribeRateStr} label="Rate" icon={<Users size={20}/>} />
              <MetricCardSmall title="Replies" value={data.repliesTotal.toLocaleString()} label="Replies" icon={<MessageSquare size={20}/>} />
           </div>
 
-          <div id="pdf-performance-table">
-            <EmailPerformanceTable rows={data.campaignsPerformance} />
-          </div>
+          <EmailPerformanceTable rows={data.campaignsPerformance} />
 
         </div>
       </main>
