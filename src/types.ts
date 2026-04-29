@@ -105,7 +105,29 @@ export interface ReportData {
   h1Color: string;
   h2Color: string;
   h3Color: string;
+  h4Color?: string;
   descColor: string;
   fontFamily: 'sans' | 'serif' | 'mono';
   borderRadius: 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
+
+  // Section Labels & Titles
+  overviewTitle?: string;
+  campaignName?: string;
+  goalsTitle?: string;
+  growthTitle?: string;
+  growthDistributionTitle?: string;
+  dealsValueTitle?: string;
+  dealsGoalsTitle?: string;
+  campaignEngagementTitle?: string;
+  metricsLabels?: string[];
+  trendsSentOpensTitle?: string;
+  trendsClicksTitle?: string;
+  trendsClickRateTitle?: string;
+  funnelClicksTitle?: string;
+  funnelTrendsTitle?: string;
+  performanceTableTitle?: string;
+  thanksTitle?: string;
+  thanksBody?: string;
+
+  sections?: { id: string, type: 'cover' | 'overview' | 'goals' | 'growth' | 'deals' | 'metrics' | 'trends' | 'funnel' | 'table' | 'footer' }[];
 }

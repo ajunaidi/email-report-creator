@@ -1,7 +1,7 @@
 import { ReportData } from "./types";
 
 export const MOCK_FULL_DATA: ReportData = {
-  reportTitle: "Email Marketing Report Template",
+  reportTitle: "Ajunaidi Email Report Builder",
   datePeriod: "03/24/2026 - 04/22/2026",
   tags: ["General Email Marketing", "eCommerce Email Marketing"],
   
@@ -90,5 +90,34 @@ export const MOCK_FULL_DATA: ReportData = {
   descColor: "#57534e",
   fontFamily: 'sans',
   borderRadius: '2xl',
-  clientLogo: ""
+  clientLogo: "",
+  overviewTitle: "Overview\nMetrics",
+  campaignName: "Campaign Name",
+  goalsTitle: "Email Marketing Report",
+  growthTitle: "Deals and Contacts in Account",
+  growthDistributionTitle: "Contacts & Deals distribution",
+  dealsValueTitle: "Deals value",
+  dealsGoalsTitle: "Deals and Conversion Goals",
+  campaignEngagementTitle: "Campaign Engagement List",
+  metricsLabels: ["Total Emails Sent", "Opens", "Open Rate", "Contact Count", "Deal Count", "Deals Value", "Contact Count", "Deal Count", "Deals Value"],
+  trendsSentOpensTitle: "Sent vs. Opens",
+  trendsClicksTitle: "Link clicks",
+  trendsClickRateTitle: "Link Click Rate",
+  funnelClicksTitle: "Email Clicks funnel",
+  funnelTrendsTitle: "Sent/opened emails trends",
+  performanceTableTitle: "Campaigns Performance",
+  thanksTitle: "Thanks\nyou",
+  thanksBody: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, seodo eiusm odtempor incididunt ut labore et dolore magna aliqua. Ut enim asdfd minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+  sections: [
+    { id: 'sec-1', type: 'cover' },
+    { id: 'sec-2', type: 'overview' },
+    { id: 'sec-3', type: 'goals' },
+    { id: 'sec-4', type: 'growth' },
+    { id: 'sec-5', type: 'deals' },
+    { id: 'sec-6', type: 'metrics' },
+    { id: 'sec-7', type: 'trends' },
+    { id: 'sec-8', type: 'funnel' },
+    { id: 'sec-9', type: 'table' },
+    { id: 'sec-10', type: 'footer' }
+  ]
 };

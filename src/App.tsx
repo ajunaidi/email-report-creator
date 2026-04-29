@@ -7,18 +7,12 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   BarChart3, Users, Mail, TrendingUp, MousePointerClick, 
   LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image, Type, Maximize2, FileText,
-  Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon
+  Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { cn } from './lib/utils';
 import { compressImage } from './lib/imageUtils';
-
-const formatNumber = (val: number | undefined | null) => {
-  return (val ?? 0).toLocaleString();
-};
-
-export interface ReportDataWithOptional extends ReportData {}
 import { ReportData, CampaignPerformanceRow } from './types';
 import { MOCK_FULL_DATA } from './mockData';
 import { ReportHeader } from './components/ReportHeader';
@@ -41,6 +35,179 @@ import {
 } from 'firebase/auth';
 import { saveReport, getReport } from './services/reportService';
 
+const formatNumber = (val: number | undefined | null) => {
+  return (val ?? 0).toLocaleString();
+};
+
+// --- Editable Components ---
+
+function EditableText({ value, onChange, className, isViewer }: { value: string, onChange: (v: string) => void, className?: string, isViewer?: boolean }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [val, setVal] = useState(value);
+
+  useEffect(() => { setVal(value); }, [value]);
+
+  if (isViewer) return <span className={className}>{value}</span>;
+
+  if (isEditing) {
+    return (
+      <input
+        autoFocus
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={() => { setIsEditing(false); onChange(val); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { setIsEditing(false); onChange(val); } }}
+        className={cn("bg-white/90 text-black border-2 border-[#E8B931] outline-none rounded px-1", className)}
+      />
+    );
+  }
+
+  return (
+    <span 
+      onClick={() => setIsEditing(true)} 
+      className={cn("cursor-pointer hover:bg-black/5 rounded transition-colors", className)}
+    >
+      {value || <span className="opacity-30 italic">Click to edit</span>}
+    </span>
+  );
+}
+
+function EditableTextArea({ value, onChange, className, isViewer }: { value: string, onChange: (v: string) => void, className?: string, isViewer?: boolean }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [val, setVal] = useState(value);
+
+  useEffect(() => { setVal(value); }, [value]);
+
+  if (isViewer) return <span className={className}>{value}</span>;
+
+  if (isEditing) {
+    return (
+      <textarea
+        autoFocus
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={() => { setIsEditing(false); onChange(val); }}
+        className={cn("w-full bg-white/90 text-black border-2 border-[#E8B931] outline-none rounded p-2", className)}
+      />
+    );
+  }
+
+  return (
+    <span 
+      onClick={() => setIsEditing(true)} 
+      className={cn("cursor-pointer hover:bg-black/5 rounded block", className)}
+    >
+      {value || <span className="opacity-30 italic">Click to edit</span>}
+    </span>
+  );
+}
+
+function EditableNumber({ value, onChange, className, prefix = '', suffix = '', isViewer }: { value: number, onChange: (v: number) => void, className?: string, prefix?: string, suffix?: string, isViewer?: boolean }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [val, setVal] = useState(value.toString());
+
+  useEffect(() => { setVal(value.toString()); }, [value]);
+
+  if (isViewer) return <span className={className}>{prefix}{formatNumber(value)}{suffix}</span>;
+
+  if (isEditing) {
+    return (
+      <input
+        autoFocus
+        type="number"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={() => { setIsEditing(false); onChange(Number(val)); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { setIsEditing(false); onChange(Number(val)); } }}
+        className={cn("bg-white/90 text-black border-2 border-[#E8B931] outline-none rounded px-1", className)}
+      />
+    );
+  }
+
+  return (
+    <span 
+      onClick={() => setIsEditing(true)} 
+      className={cn("cursor-pointer hover:bg-black/5 rounded", className)}
+    >
+      {prefix}{formatNumber(value)}{suffix}
+    </span>
+  );
+}
+
+function ClickableImage({ src, onUpload, className, isViewer }: { src?: string, onUpload: (url: string) => void, className?: string, isViewer?: boolean }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const compressed = await compressImage(reader.result as string, 800, 800, 0.6);
+        onUpload(compressed);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  if (isViewer) {
+    return src ? <img src={src} className={className} alt="" /> : <div className={cn("bg-slate-100 flex items-center justify-center", className)}><Image className="text-slate-300" /></div>;
+  }
+
+  return (
+    <div 
+      onClick={() => fileInputRef.current?.click()} 
+      className={cn("relative group cursor-pointer overflow-hidden", className)}
+    >
+      {src ? (
+        <img src={src} className="w-full h-full object-contain" alt="" />
+      ) : (
+        <div className="w-full h-full bg-slate-100 flex items-center justify-center">
+          <Plus className="text-slate-400 group-hover:text-[#E8B931] group-hover:scale-125 transition-all" />
+        </div>
+      )}
+      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+        <label className="bg-white text-black px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest pointer-events-none shadow-xl">
+          Upload Image
+        </label>
+      </div>
+      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFile} />
+    </div>
+  );
+}
+
+function SectionControls({ onDuplicate, onRemove, isViewer }: { onDuplicate: () => void, onRemove: () => void, isViewer?: boolean }) {
+  if (isViewer) return null;
+  return (
+    <div className="absolute -top-10 right-0 flex gap-2 opacity-0 group-hover/section:opacity-100 transition-opacity z-50">
+      <button 
+        onClick={onDuplicate} 
+        className="w-8 h-8 rounded-full bg-white text-stone-600 shadow-xl flex items-center justify-center hover:bg-[#E8B931] hover:text-white transition-all transform hover:scale-110"
+        title="Duplicate Section"
+      >
+        <Copy size={14} />
+      </button>
+      <button 
+        onClick={onRemove} 
+        className="w-8 h-8 rounded-full bg-white text-red-500 shadow-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all transform hover:scale-110"
+        title="Remove Section"
+      >
+        <Trash size={14} />
+      </button>
+    </div>
+  );
+}
+
+function SectionWrapper({ children, onDuplicate, onRemove, isViewer }: { children: React.ReactNode, onDuplicate: () => void, onRemove: () => void, isViewer?: boolean }) {
+  return (
+    <div className="relative group/section">
+      <SectionControls onDuplicate={onDuplicate} onRemove={onRemove} isViewer={isViewer} />
+      {children}
+    </div>
+  );
+}
+
+export interface ReportDataWithOptional extends ReportData {}
+
 export default function App() {
   const [data, setData] = useState<ReportData>(MOCK_FULL_DATA);
   const [reportId, setReportId] = useState<string | null>(null);
@@ -51,6 +218,744 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isViewerMode, setIsViewerMode] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
+
+  const addSection = (type: any) => {
+    const newSection = { id: `sec-${Date.now()}`, type };
+    setData({ ...data, sections: [...(data.sections || []), newSection] });
+  };
+
+  const duplicateSection = (id: string) => {
+    const sectionIndex = data.sections?.findIndex(s => s.id === id);
+    if (sectionIndex === undefined || sectionIndex === -1) return;
+    const section = data.sections![sectionIndex];
+    const newSection = { ...section, id: `sec-${Date.now()}` };
+    const newSections = [...(data.sections || [])];
+    newSections.splice(sectionIndex + 1, 0, newSection);
+    setData({ ...data, sections: newSections });
+  };
+
+  const removeSection = (id: string) => {
+    setData({ ...data, sections: data.sections?.filter(s => s.id !== id) });
+  };
+
+  const renderSection = (section: { id: string, type: string }) => {
+    const commonProps = {
+      onDuplicate: () => duplicateSection(section.id),
+      onRemove: () => removeSection(section.id),
+      isViewer: isViewerMode
+    };
+
+    switch (section.type) {
+      case 'cover':
+        return (
+          <SectionWrapper key={section.id} {...commonProps}>
+            <div className="min-h-[800px] flex flex-col justify-center relative">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                  <div>
+                     <h1 className="text-[60px] sm:text-[100px] md:text-[120px] font-black leading-[0.85] tracking-tighter text-stone-950 mb-4 whitespace-pre-wrap">
+                        <EditableTextArea 
+                          value={data.reportTitle || "EMAIL\nMARKETING\nCASE STUDY"} 
+                          onChange={(v) => setData({ ...data, reportTitle: v })}
+                          isViewer={isViewerMode}
+                        />
+                     </h1>
+                     <p className="text-xl md:text-2xl font-bold uppercase tracking-widest text-stone-800 opacity-80 mt-8">
+                        <EditableText 
+                          value={data.campaignName || "Campaign Overview"} 
+                          onChange={(v) => setData({ ...data, campaignName: v })} 
+                          isViewer={isViewerMode}
+                        />
+                     </p>
+                     <div className="mt-24">
+                        <ClickableImage 
+                          src={data.clientLogo}
+                          onUpload={(url) => setData({ ...data, clientLogo: url })}
+                          className="w-48 h-48 md:w-64 md:h-64 bg-stone-900/5 rounded-full flex items-center justify-center border-4 border-dashed border-stone-950/20"
+                          isViewer={isViewerMode}
+                        />
+                     </div>
+                  </div>
+                  
+                  <div className="relative pl-0 md:pl-12 mt-12 md:mt-0">
+                      <div className="space-y-12 relative z-10">
+                         {[
+                           { label: "Emails Sent", val: formatNumber(data.actualSent), sub: "Total campaign distribution", icon: <TrendingUp/> },
+                           { label: "Total Clicks", val: formatNumber(data.actualClicks), sub: "Total link engagement", icon: <MousePointerClick/> },
+                           { label: "Overall Open Rate", val: data.metricsOpenRate, sub: "Recipient engagement rate", icon: <ExternalLink/> },
+                           { label: "Replies / Unsub", val: `${formatNumber(data.actualReplies)} / ${formatNumber(data.unsubscribes)}`, sub: "Interaction vs attrition", icon: <LogOut/> }
+                         ].map((item, idx) => (
+                           <div key={idx} className="flex items-center gap-6 group">
+                              <div className="w-16 h-16 md:w-20 md:h-20 rounded-[24px] bg-stone-900 text-[#E8B931] flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform flex-shrink-0">
+                                 {item.icon}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                 <p className="text-xl md:text-2xl font-black text-stone-950 truncate">{item.val}</p>
+                                 <p className="text-sm font-bold text-stone-800 opacity-60 truncate">{item.label} — {item.sub}</p>
+                              </div>
+                           </div>
+                         ))}
+                      </div>
+                  </div>
+               </div>
+            </div>
+          </SectionWrapper>
+        );
+      case 'overview':
+        return (
+          <SectionWrapper key={section.id} {...commonProps}>
+            <div className="min-h-[800px] flex flex-col justify-center">
+               <h2 className="text-[60px] md:text-[100px] font-black tracking-tighter text-stone-950 mb-12">
+                  <EditableTextArea 
+                    value={data.overviewTitle || "Overview\nMetrics"} 
+                    onChange={(v) => setData({ ...data, overviewTitle: v })} 
+                    isViewer={isViewerMode} 
+                  />
+               </h2>
+               <div className="space-y-6 max-w-2xl">
+                  {[
+                    "Total Emails Sent", "Total Opens", "Total Clicks", 
+                    "Overall Open Rate", "Overall Click Rate", "Replies / Unsubscribes"
+                  ].map((m, i) => (
+                    <div key={i} className="flex items-center gap-4 text-2xl md:text-3xl font-bold text-stone-800">
+                      <div className="w-8 h-2 bg-stone-950 rounded-full flex-shrink-0" />
+                      <EditableText value={m} onChange={() => {}} isViewer={isViewerMode} />
+                    </div>
+                  ))}
+                  <p className="text-xl font-medium text-stone-800 opacity-60 mt-12 italic">
+                    <EditableText value="Show in 4–6 clean boxes (no clutter)" onChange={() => {}} isViewer={isViewerMode} />
+                  </p>
+               </div>
+            </div>
+          </SectionWrapper>
+        );
+      case 'goals':
+        return (
+          <SectionWrapper key={section.id} {...commonProps}>
+            <div className="space-y-12">
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-8">
+                  <div>
+                     <p className="text-xl md:text-2xl font-black text-stone-800 opacity-60 uppercase tracking-widest">
+                       <EditableText 
+                         value={data.campaignName || "Campaign Name"} 
+                         onChange={(v) => setData({ ...data, campaignName: v })} 
+                         isViewer={isViewerMode} 
+                       />
+                     </p>
+                     <h2 className="text-5xl md:text-7xl font-black text-stone-950 tracking-tighter uppercase leading-tight">
+                       <EditableText 
+                         value={data.goalsTitle || "Email Marketing Report"} 
+                         onChange={(v) => setData({ ...data, goalsTitle: v })} 
+                         isViewer={isViewerMode} 
+                       />
+                     </h2>
+                  </div>
+                  <BentoCard className="flex items-center gap-8 py-4 px-10 w-full md:w-auto overflow-hidden">
+                     <div className="p-4 bg-slate-100 rounded-2xl flex-shrink-0"><CalendarIcon className="text-stone-400" /></div>
+                     <div className="min-w-0">
+                        <p className="text-[10px] font-black uppercase text-slate-400">Date Period</p>
+                         <p className="text-lg md:text-xl font-black truncate">
+                           <EditableText value={data.datePeriod} onChange={(v) => setData({ ...data, datePeriod: v })} isViewer={isViewerMode} />
+                         </p>
+                        <p className="text-xs font-bold text-slate-400">Duration: 30 days</p>
+                     </div>
+                  </BentoCard>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                  <BentoCard className="overflow-hidden">
+                     <h3 className="text-xl font-black uppercase mb-8 border-b border-slate-50 pb-4">Deals and Conversion Goals</h3>
+                     <div className="space-y-10">
+                        <MetricRowProgress label="Contact Count" val={data.conversionCount} max={data.conversionGoal} color="#ef4444" />
+                        <MetricRowProgress label="Deal Count" val={data.dealsCount} max={data.dealsGoal} color="#1a1a1a" />
+                     </div>
+                  </BentoCard>
+                  <BentoCard className="overflow-hidden">
+                     <h3 className="text-xl font-black uppercase mb-8 border-b border-slate-50 pb-4">List of Deals and Contacts</h3>
+                     <div className="space-y-8">
+                        <div className="flex justify-between items-center bg-slate-50 p-6 rounded-3xl gap-4">
+                           <div className="flex items-center gap-4 text-stone-500 font-bold truncate flex-shrink-0"><Users/> Contact Count</div>
+                           <span className="text-2xl md:text-3xl font-black text-stone-950 truncate">
+                             <EditableNumber value={data.listContacts} onChange={(v) => setData({ ...data, listContacts: v })} isViewer={isViewerMode} />
+                           </span>
+                        </div>
+                        <div className="flex justify-between items-center bg-slate-50 p-6 rounded-3xl gap-4">
+                           <div className="flex items-center gap-4 text-stone-500 font-bold truncate flex-shrink-0"><Briefcase/> Deal Count</div>
+                           <span className="text-2xl md:text-3xl font-black text-stone-950 truncate">
+                             <EditableNumber value={data.listDeals} onChange={(v) => setData({ ...data, listDeals: v })} isViewer={isViewerMode} />
+                           </span>
+                        </div>
+                     </div>
+                  </BentoCard>
+                  <BentoCard className="flex flex-col min-h-[300px] overflow-hidden">
+                     <h3 className="text-xl font-black uppercase mb-8 border-b border-slate-50 pb-4 text-red-500">Summary</h3>
+                     <div className="text-stone-500 text-sm leading-loose font-medium flex-1 overflow-y-auto">
+                       <EditableTextArea value={data.summary} onChange={(v) => setData({ ...data, summary: v })} isViewer={isViewerMode} className="h-full" />
+                     </div>
+                  </BentoCard>
+                  <BentoCard className="overflow-hidden">
+                     <h3 className="text-xl font-black uppercase mb-8 border-b border-slate-50 pb-4 text-red-500">Summary Highlights</h3>
+                     <div className="space-y-6 overflow-y-auto max-h-[400px]">
+                        {data.recommendations.map((rec, i) => (
+                          <div key={i} className="flex gap-4 group">
+                             <span className="text-lg font-black text-red-500 flex-shrink-0 transition-transform group-hover:scale-125">{i+1}.</span>
+                             <div className="text-sm font-bold text-stone-600 leading-relaxed group-hover:text-stone-950 flex-1">
+                               <EditableTextArea 
+                                 value={rec} 
+                                 onChange={(v) => {
+                                   const newRecs = [...data.recommendations];
+                                   newRecs[i] = v;
+                                   setData({ ...data, recommendations: newRecs });
+                                 }} 
+                                 isViewer={isViewerMode}
+                                 className={rec.includes("%") ? "text-red-500" : ""}
+                               />
+                             </div>
+                          </div>
+                        ))}
+                     </div>
+                  </BentoCard>
+               </div>
+            </div>
+          </SectionWrapper>
+        );
+      case 'growth':
+        return (
+          <SectionWrapper key={section.id} {...commonProps}>
+            <div className="space-y-12">
+               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+                   {[
+                     { label: "Contact Count", key: 'contactCount', icon: <Users size={28}/>, accent: '#ef4444', desc: "consectetur adipiscing elitged duilo sectetur" },
+                     { label: "Deal Count", key: 'dealCount', icon: <Briefcase size={28}/>, accent: '#1a1a1a', desc: "consectetur adipiscing elitged duilo sectetur" },
+                     { label: "Deals Value", key: 'dealsValue', icon: <TrendingUp size={28}/>, accent: '#ef4444', prefix: '$', desc: "consectetur adipiscing elitged duilo sectetur" }
+                   ].map((m, i) => (
+                     <BentoCard key={i} className="relative group overflow-hidden p-6 md:p-10">
+                        <p className="text-lg font-black text-stone-950 mb-3 truncate">
+                          <EditableText value={m.label} onChange={() => {}} isViewer={isViewerMode} />
+                        </p>
+                        <p className="text-[10px] text-stone-400 font-bold mb-8 leading-relaxed line-clamp-2">
+                          <EditableTextArea value={m.desc} onChange={() => {}} isViewer={isViewerMode} />
+                        </p>
+                        <div className="flex items-center gap-4 md:gap-6">
+                           <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl flex items-center justify-center text-white shadow-lg flex-shrink-0" style={{ backgroundColor: i % 2 === 0 ? '#fee2e2' : '#f1f5f9' }}>
+                             <div className="text-red-500" style={{ color: i % 2 === 0 ? '#ef4444' : '#1e1b4b' }}>{m.icon}</div>
+                           </div>
+                           <div className="min-w-0">
+                             <p className="text-2xl md:text-4xl font-black text-stone-950 truncate">
+                               <EditableNumber 
+                                 value={(data as any)[m.key]} 
+                                 prefix={m.prefix} 
+                                 onChange={(v) => setData({ ...data, [m.key]: v })} 
+                                 isViewer={isViewerMode} 
+                               />
+                             </p>
+                             <p className="text-[10px] font-black uppercase text-slate-300 tracking-widest truncate">{m.label}</p>
+                           </div>
+                        </div>
+                     </BentoCard>
+                   ))}
+               </div>
+  
+               <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+                  <BentoCard className="md:col-span-7 overflow-hidden">
+                      <h3 className="text-xl font-black uppercase mb-12">
+                        <EditableText 
+                          value={data.growthTitle || "Deals and Contacts in Account"} 
+                          onChange={(v) => setData({ ...data, growthTitle: v })} 
+                          isViewer={isViewerMode} 
+                        />
+                      </h3>
+                     <div className="h-[300px] w-full">
+                        {data.growthChartImage ? (
+                          <ClickableImage 
+                            src={data.growthChartImage} 
+                            onUpload={(url) => setData({ ...data, growthChartImage: url })} 
+                            className="w-full h-full" 
+                            isViewer={isViewerMode} 
+                          />
+                        ) : (
+                          <ResponsiveContainer width="100%" height="100%">
+                             <AreaChart data={data.growthLabels.map((l, i) => ({ name: l, contacts: data.growthContacts[i], deals: data.growthDeals[i] }))}>
+                                <Area type="monotone" dataKey="contacts" stroke="#ef4444" strokeWidth={4} fill="#fee2e2" fillOpacity={0.6} />
+                                <Area type="monotone" dataKey="deals" stroke="#1a1a1a" strokeWidth={4} fill="transparent" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={10} fontWeight={900} />
+                                <YAxis axisLine={false} tickLine={false} fontSize={10} fontWeight={900} />
+                                <Tooltip />
+                             </AreaChart>
+                          </ResponsiveContainer>
+                        )}
+                     </div>
+                  </BentoCard>
+                   <BentoCard className="md:col-span-5 flex flex-col items-center overflow-hidden">
+                      <h3 className="text-xl font-black uppercase mb-12 text-center">
+                        <EditableText 
+                          value={data.growthDistributionTitle || "Contacts & Deals distribution"} 
+                          onChange={(v) => setData({ ...data, growthDistributionTitle: v })} 
+                          isViewer={isViewerMode} 
+                        />
+                      </h3>
+                     <div className="relative w-48 h-48 md:w-64 md:h-64 flex-shrink-0">
+                        {data.distributionChartImage ? (
+                          <ClickableImage 
+                            src={data.distributionChartImage} 
+                            onUpload={(url) => setData({ ...data, distributionChartImage: url })} 
+                            className="w-full h-full" 
+                            isViewer={isViewerMode} 
+                          />
+                        ) : (
+                          <ResponsiveContainer width="100%" height="100%">
+                             <PieChart>
+                                <Pie data={[{ name: 'Ratio', value: 38 }, { name: 'Other', value: 62 }]} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                   <Cell fill="#ef4444" />
+                                   <Cell fill="#1a1a1a" />
+                                </Pie>
+                             </PieChart>
+                          </ResponsiveContainer>
+                        )}
+                        {!data.distributionChartImage && (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                             <span className="text-[10px] font-black text-slate-400 uppercase">Ratio</span>
+                             <span className="text-3xl md:text-5xl font-black text-stone-950 tracking-tighter">38%</span>
+                          </div>
+                        )}
+                     </div>
+                     <div className="mt-8 space-y-3 w-full">
+                        <div className="flex justify-between items-center text-[10px] md:text-xs font-black">
+                           <div className="flex items-center gap-2 truncate"><div className="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"/> Contact Count</div>
+                           <span className="flex-shrink-0">2,871 (38.41%)</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] md:text-xs font-black">
+                           <div className="flex items-center gap-2 truncate"><div className="w-3 h-3 rounded-full bg-stone-900 flex-shrink-0"/> Deal Count</div>
+                           <span className="flex-shrink-0">2,871 (38.41%)</span>
+                        </div>
+                     </div>
+                  </BentoCard>
+               </div>
+            </div>
+          </SectionWrapper>
+        );
+      case 'deals':
+        return (
+          <SectionWrapper key={section.id} {...commonProps}>
+            <div className="space-y-12">
+               <BentoCard className="overflow-hidden">
+                  <div className="flex justify-between items-center mb-8 border-b pb-4 gap-4">
+                     <h3 className="text-xl md:text-2xl font-black uppercase tracking-tighter truncate">
+                       <EditableText 
+                         value={data.dealsValueTitle || "Deals value"} 
+                         onChange={(v) => setData({ ...data, dealsValueTitle: v })} 
+                         isViewer={isViewerMode} 
+                       />
+                     </h3>
+                     <span className="text-xs md:text-sm font-black text-slate-400 uppercase tracking-widest flex-shrink-0">Value</span>
+                  </div>
+                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                     {data.dealSources.map((s, idx) => (
+                       <div key={s.id} className="flex justify-between items-center group py-2 gap-4 border-b border-transparent hover:border-slate-100 transition-colors">
+                          <span className="text-base md:text-lg font-bold text-stone-700 group-hover:text-stone-950 transition-colors uppercase italic truncate">
+                            <EditableText 
+                              value={s.source} 
+                              onChange={(v) => {
+                                const newSources = [...data.dealSources];
+                                newSources[idx].source = v;
+                                setData({ ...data, dealSources: newSources });
+                              }} 
+                              isViewer={isViewerMode} 
+                            />
+                          </span>
+                          <span className="text-base md:text-lg font-black text-stone-950 flex-shrink-0">
+                            <EditableNumber 
+                              value={s.value} 
+                              onChange={(v) => {
+                                const newSources = [...data.dealSources];
+                                newSources[idx].value = v;
+                                setData({ ...data, dealSources: newSources });
+                              }} 
+                              isViewer={isViewerMode} 
+                            />
+                          </span>
+                       </div>
+                     ))}
+                  </div>
+               </BentoCard>
+  
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                  <BentoCard className="overflow-hidden">
+                     <h3 className="text-xl font-black uppercase mb-10 text-red-500">
+                       <EditableText 
+                         value={data.dealsGoalsTitle || "Deals and Conversion Goals"} 
+                         onChange={(v) => setData({ ...data, dealsGoalsTitle: v })} 
+                         isViewer={isViewerMode} 
+                       />
+                     </h3>
+                     <div className="space-y-10">
+                        <MetricRowProgress label="Contact Count" val={data.conversionCount} max={data.conversionGoal} color="#ef4444" />
+                        <MetricRowProgress label="Deal Count" val={data.dealsCount} max={data.dealsGoal} color="#1a1a1a" />
+                        <MetricRowProgress label="Total Link Clicks" val={data.actualClicks} max={data.linkClicksGoal} color="#ef4444" />
+                     </div>
+                  </BentoCard>
+                  <BentoCard className="overflow-hidden">
+                     <h3 className="text-xl font-black uppercase mb-10 text-red-500">
+                       <EditableText 
+                         value={data.campaignEngagementTitle || "Campaign Engagement List"} 
+                         onChange={(v) => setData({ ...data, campaignEngagementTitle: v })} 
+                         isViewer={isViewerMode} 
+                       />
+                     </h3>
+                     <div className="space-y-6">
+                        <IconMetricRow icon={<Mail/>} label="Emails Sent" val={data.actualSent} />
+                        <IconMetricRow icon={<ExternalLink/>} label="Opens" val={data.actualOpens} />
+                        <IconMetricRow icon={<MousePointerClick/>} label="Link Clicks" val={data.actualClicks} />
+                        <IconMetricRow icon={<MessageSquare/>} label="Replies" val={data.actualReplies} />
+                     </div>
+                  </BentoCard>
+               </div>
+            </div>
+          </SectionWrapper>
+        );
+      case 'metrics':
+        return (
+          <SectionWrapper key={section.id} {...commonProps}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+               {[
+                 { label: data.metricsLabels?.[0] || "Total Emails Sent", val: 2871, icon: <Users/>, sub: "Contact Count" },
+                 { label: data.metricsLabels?.[1] || "Opens", val: 4603, icon: <ExternalLink/>, sub: "Deal Count" },
+                 { label: data.metricsLabels?.[2] || "Open Rate", val: 5871, icon: <TrendingUp/>, sub: "Value", prefix: "$" },
+                 { label: data.metricsLabels?.[3] || "Contact Count", val: 2871, icon: <Users/>, sub: "Contact Count" },
+                 { label: data.metricsLabels?.[4] || "Deal Count", val: 4603, icon: <Briefcase/>, sub: "Deal Count" },
+                 { label: data.metricsLabels?.[5] || "Deals Value", val: 5871, icon: <TrendingUp/>, sub: "Value", prefix: "$" },
+                 { label: data.metricsLabels?.[6] || "Contact Count", val: 2871, icon: <Users/>, sub: "Contact Count" },
+                 { label: data.metricsLabels?.[7] || "Deal Count", val: 4603, icon: <Briefcase/>, sub: "Deal Count" },
+                 { label: data.metricsLabels?.[8] || "Deals Value", val: 5871, icon: <TrendingUp/>, sub: "Value", prefix: "$" }
+               ].map((m, i) => (
+                  <BentoCard key={i} className="overflow-hidden p-6 md:p-10">
+                     <p className="text-sm font-black text-stone-950 mb-1 truncate">
+                       <EditableText 
+                         value={m.label} 
+                         onChange={(v) => {
+                           const newLabels = [...(data.metricsLabels || [])];
+                           newLabels[i] = v;
+                           setData({ ...data, metricsLabels: newLabels });
+                         }} 
+                         isViewer={isViewerMode} 
+                       />
+                     </p>
+                     <p className="text-[10px] text-stone-400 font-bold mb-8 truncate">
+                       <EditableText value="consectetur adipiscing elitged duilo sectetur" onChange={() => {}} isViewer={isViewerMode} />
+                     </p>
+                     <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 md:w-12 md:h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center flex-shrink-0">
+                           {m.icon}
+                        </div>
+                        <div className="min-w-0">
+                           <p className="text-2xl md:text-3xl font-black text-stone-950 truncate">
+                             <EditableNumber value={m.val} prefix={m.prefix} onChange={() => {}} isViewer={isViewerMode} />
+                           </p>
+                           <p className="text-[10px] uppercase font-black text-slate-300 tracking-widest truncate">{m.sub}</p>
+                        </div>
+                     </div>
+                  </BentoCard>
+               ))}
+            </div>
+          </SectionWrapper>
+        );
+      case 'trends':
+        return (
+          <SectionWrapper key={section.id} {...commonProps}>
+            <div className="space-y-12">
+               <BentoCard className="overflow-hidden">
+                  <h3 className="text-xl font-black uppercase mb-12 truncate">
+                    <EditableText 
+                      value={data.trendsSentOpensTitle || "Sent vs. Opens"} 
+                      onChange={(v) => setData({ ...data, trendsSentOpensTitle: v })} 
+                      isViewer={isViewerMode} 
+                    />
+                  </h3>
+                  <div className="h-[300px] md:h-[400px] w-full">
+                     {data.sentOpensChartImage ? (
+                       <ClickableImage 
+                         src={data.sentOpensChartImage} 
+                         onUpload={(url) => setData({ ...data, sentOpensChartImage: url })} 
+                         className="w-full h-full" 
+                         isViewer={isViewerMode} 
+                       />
+                     ) : (
+                       <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={data.growthLabels.map((l, i) => ({ name: l, sent: data.sentTrend[i], opens: data.opensTrend[i] }))}>
+                             <Area type="monotone" dataKey="sent" stroke="#1a1a1a" strokeWidth={3} fill="transparent" />
+                             <Area type="monotone" dataKey="opens" stroke="#ef4444" strokeWidth={3} fill="transparent" />
+                             <XAxis dataKey="name" fontSize={10} fontWeight={900} axisLine={false} tickLine={false} />
+                             <YAxis fontSize={10} fontWeight={900} axisLine={false} tickLine={false} />
+                             <Tooltip />
+                          </AreaChart>
+                       </ResponsiveContainer>
+                     )}
+                  </div>
+                  <div className="flex justify-center gap-4 md:gap-8 mt-4 overflow-x-auto pb-2">
+                     <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap"><div className="w-8 h-1 bg-stone-950 rounded-full"/> Sent</div>
+                     <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap"><div className="w-8 h-1 bg-red-500 rounded-full"/> Opens</div>
+                  </div>
+               </BentoCard>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                  <BentoCard className="flex flex-col justify-between overflow-hidden">
+                     <div>
+                       <p className="text-xl font-black text-stone-950 mb-2 truncate">
+                         <EditableText 
+                           value={data.trendsClicksTitle || "Link clicks"} 
+                           onChange={(v) => setData({ ...data, trendsClicksTitle: v })} 
+                           isViewer={isViewerMode} 
+                         />
+                       </p>
+                       <p className="text-[10px] text-stone-400 font-bold mb-8 leading-relaxed truncate">
+                         <EditableText value="consectetur adipiscing elitged duilo sectetur" onChange={() => {}} isViewer={isViewerMode} />
+                       </p>
+                     </div>
+                     <div className="flex items-center gap-6">
+                        <div className="w-12 h-12 md:w-16 md:h-16 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center shadow-lg flex-shrink-0"><MousePointerClick size={30}/></div>
+                        <div className="min-w-0">
+                           <p className="text-3xl md:text-5xl font-black text-stone-950 truncate">
+                             <EditableNumber value={8303} onChange={() => {}} isViewer={isViewerMode} />
+                           </p>
+                           <p className="text-[10px] md:text-xs font-black text-slate-300 uppercase tracking-widest">Link Clicks</p>
+                        </div>
+                     </div>
+                  </BentoCard>
+                  <BentoCard className="flex flex-col justify-between overflow-hidden">
+                     <div>
+                       <p className="text-xl font-black text-stone-950 mb-2 truncate">
+                         <EditableText 
+                           value={data.trendsClickRateTitle || "Link Click Rate"} 
+                           onChange={(v) => setData({ ...data, trendsClickRateTitle: v })} 
+                           isViewer={isViewerMode} 
+                         />
+                       </p>
+                       <p className="text-[10px] text-stone-400 font-bold mb-8 leading-relaxed truncate">
+                         <EditableText value="consectetur adipiscing elitged duilo sectetur" onChange={() => {}} isViewer={isViewerMode} />
+                       </p>
+                     </div>
+                     <div className="flex items-center gap-6">
+                        <div className="w-12 h-12 md:w-16 md:h-16 bg-slate-100 text-stone-400 rounded-3xl flex items-center justify-center shadow-lg flex-shrink-0"><Filter size={30}/></div>
+                        <div className="min-w-0">
+                           <p className="text-3xl md:text-5xl font-black text-stone-950 truncate">
+                             <EditableNumber value={4603} onChange={() => {}} isViewer={isViewerMode} />
+                           </p>
+                           <p className="text-[10px] md:text-xs font-black text-slate-300 uppercase tracking-widest">Deal Count</p>
+                        </div>
+                     </div>
+                  </BentoCard>
+               </div>
+            </div>
+          </SectionWrapper>
+        );
+      case 'funnel':
+        return (
+          <SectionWrapper key={section.id} {...commonProps}>
+            <div className="space-y-12">
+               <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+                  <BentoCard className="md:col-span-5 text-center overflow-hidden">
+                     <h3 className="text-xl font-black uppercase mb-12 text-left truncate">
+                       <EditableText 
+                         value={data.funnelClicksTitle || "Email Clicks funnel"} 
+                         onChange={(v) => setData({ ...data, funnelClicksTitle: v })} 
+                         isViewer={isViewerMode} 
+                       />
+                     </h3>
+                     <div className="h-[300px] md:h-auto overflow-hidden">
+                        {data.funnelChartImage ? (
+                          <ClickableImage 
+                            src={data.funnelChartImage} 
+                            onUpload={(url) => setData({ ...data, funnelChartImage: url })} 
+                            className="w-full h-full" 
+                            isViewer={isViewerMode} 
+                          />
+                        ) : (
+                          <div className="space-y-4 mb-12">
+                             <div className="bg-red-600 text-white p-4 md:p-6 rounded-3xl text-xl md:text-3xl font-black uppercase italic tracking-tighter">SENT</div>
+                             <div className="bg-stone-900 text-white p-4 md:p-6 rounded-3xl text-xl md:text-3xl font-black uppercase italic tracking-tighter mx-4">OPENED</div>
+                             <div className="bg-red-300 text-white p-4 md:p-6 rounded-3xl text-xl md:text-3xl font-black uppercase italic tracking-tighter mx-8">CLICKED</div>
+                          </div>
+                        )}
+                     </div>
+                     <div className="space-y-4 border-t pt-8">
+                        {["Porro est in.", "Porro est in.", "Porro est in."].map((p, i) => (
+                          <div key={i} className="flex justify-between font-bold text-xs text-stone-600 gap-4">
+                             <span className="truncate flex-1 text-left"><EditableText value={p} onChange={() => {}} isViewer={isViewerMode} /></span>
+                             <span className="flex-shrink-0">9,483 100.00%</span>
+                          </div>
+                        ))}
+                     </div>
+                     <div className="mt-8 flex flex-col md:flex-row justify-between items-center text-red-500 gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest">Total conversion rate</span>
+                        <span className="text-3xl md:text-5xl font-black italic tracking-tighter select-none">38.16%</span>
+                     </div>
+                  </BentoCard>
+                  <BentoCard className="md:col-span-7 overflow-hidden">
+                     <h3 className="text-xl font-black uppercase mb-12 truncate">
+                       <EditableText 
+                         value={data.funnelTrendsTitle || "Sent/opened emails trends"} 
+                         onChange={(v) => setData({ ...data, funnelTrendsTitle: v })} 
+                         isViewer={isViewerMode} 
+                       />
+                     </h3>
+                     <div className="h-[300px] md:h-[400px] w-full">
+                        {data.engagementTrendChartImage ? (
+                          <ClickableImage 
+                            src={data.engagementTrendChartImage} 
+                            onUpload={(url) => setData({ ...data, engagementTrendChartImage: url })} 
+                            className="w-full h-full" 
+                            isViewer={isViewerMode} 
+                          />
+                        ) : (
+                          <ResponsiveContainer width="100%" height="100%">
+                             <AreaChart data={data.growthLabels.map((l, i) => ({ name: l, opens: data.engagementOpensTrend[i], clicks: data.engagementClicksTrend[i] }))}>
+                                <Area type="monotone" dataKey="opens" stroke="#ef4444" strokeWidth={3} fill="transparent" />
+                                <Area type="monotone" dataKey="clicks" stroke="#1a1a1a" strokeWidth={3} fill="transparent" />
+                                <XAxis dataKey="name" fontSize={10} fontWeight={900} axisLine={false} tickLine={false} />
+                                <YAxis fontSize={10} fontWeight={900} axisLine={false} tickLine={false} />
+                             </AreaChart>
+                          </ResponsiveContainer>
+                        )}
+                     </div>
+                  </BentoCard>
+               </div>
+
+               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+                  {[
+                    { label: "Unsubscribes", val: data.unsubscribes, key: 'unsubscribes', icon: <Users/>, sub: "Contact Count" },
+                    { label: "Unsubscribes Rate", val: data.unsubscribeRateStr, key: 'unsubscribeRateStr', icon: <ExternalLink/>, sub: "Deal Count", isString: true },
+                    { label: "Replies", val: data.repliesTotal, key: 'repliesTotal', icon: <TrendingUp/>, sub: "Value", prefix: "$" }
+                  ].map((m, i) => (
+                    <BentoCard key={i} className="overflow-hidden p-6 md:p-10">
+                       <p className="text-lg font-black text-stone-950 mb-12 truncate">
+                         <EditableText value={m.label} onChange={() => {}} isViewer={isViewerMode} />
+                       </p>
+                       <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 md:w-12 md:h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center flex-shrink-0">
+                             {m.icon}
+                          </div>
+                          <div className="min-w-0">
+                             <p className="text-2xl md:text-4xl font-black text-stone-950 truncate">
+                               {m.isString ? (
+                                 <EditableText value={m.val as string} onChange={(v) => setData({ ...data, [m.key]: v })} isViewer={isViewerMode} />
+                               ) : (
+                                 <EditableNumber value={m.val as number} prefix={m.prefix} onChange={(v) => setData({ ...data, [m.key]: v })} isViewer={isViewerMode} />
+                               )}
+                             </p>
+                             <p className="text-[10px] uppercase font-black text-slate-300 tracking-widest truncate">{m.sub}</p>
+                          </div>
+                       </div>
+                    </BentoCard>
+                  ))}
+               </div>
+            </div>
+          </SectionWrapper>
+        );
+      case 'table':
+        return (
+          <SectionWrapper key={section.id} {...commonProps}>
+            <div>
+              <BentoCard className="overflow-hidden">
+                <h3 className="text-2xl md:text-3xl font-black uppercase mb-12 truncate">
+                  <EditableText 
+                    value={data.performanceTableTitle || "Campaigns Performance"} 
+                    onChange={(v) => setData({ ...data, performanceTableTitle: v })} 
+                    isViewer={isViewerMode} 
+                  />
+                </h3>
+                <div className="overflow-x-auto pb-4">
+                  <table className="w-full text-left min-w-[800px]">
+                    <thead>
+                      <tr className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] bg-slate-50">
+                        <th className="px-6 py-4 rounded-tl-3xl">Name</th>
+                        <th className="px-6 py-4">Sent</th>
+                        <th className="px-6 py-4">Opens</th>
+                        <th className="px-6 py-4">Open Rate</th>
+                        <th className="px-6 py-4">Unique Opens</th>
+                        <th className="px-6 py-4">Unique Clicks</th>
+                        <th className="px-6 py-4 rounded-tr-3xl">Link Clicks</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 italic font-bold text-stone-600">
+                      {data.campaignsPerformance.map((row, i) => (
+                        <tr key={i} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-8">
+                             <div className="text-stone-950 font-black not-italic text-sm truncate">
+                               <EditableText value={row.name} onChange={(v) => {
+                                 const copy = [...data.campaignsPerformance];
+                                 copy[i].name = v;
+                                 setData({...data, campaignsPerformance: copy});
+                               }} isViewer={isViewerMode} />
+                             </div>
+                             <div className="text-[10px] text-slate-300">Date: 2026-01-18</div>
+                          </td>
+                          <td className="px-6 py-8"><EditableNumber value={row.sent} onChange={(v) => {
+                                 const copy = [...data.campaignsPerformance];
+                                 copy[i].sent = v;
+                                 setData({...data, campaignsPerformance: copy});
+                               }} isViewer={isViewerMode} /></td>
+                          <td className="px-6 py-8"><EditableNumber value={row.opens} onChange={(v) => {
+                                 const copy = [...data.campaignsPerformance];
+                                 copy[i].opens = v;
+                                 setData({...data, campaignsPerformance: copy});
+                               }} isViewer={isViewerMode} /></td>
+                          <td className="px-6 py-8 text-red-500 font-black">
+                            <EditableNumber value={row.openRate} suffix="%" onChange={(v) => {
+                                 const copy = [...data.campaignsPerformance];
+                                 copy[i].openRate = v;
+                                 setData({...data, campaignsPerformance: copy});
+                               }} isViewer={isViewerMode} />
+                          </td>
+                          <td className="px-6 py-8">12,740</td>
+                          <td className="px-6 py-8">64.43%</td>
+                          <td className="px-6 py-8 text-red-500 font-black">
+                            <EditableNumber value={row.linkClicks} onChange={(v) => {
+                                 const copy = [...data.campaignsPerformance];
+                                 copy[i].linkClicks = v;
+                                 setData({...data, campaignsPerformance: copy});
+                               }} isViewer={isViewerMode} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </BentoCard>
+            </div>
+          </SectionWrapper>
+        );
+      case 'footer':
+        return (
+          <SectionWrapper key={section.id} {...commonProps}>
+            <div className="min-h-[700px] flex flex-col justify-center relative overflow-hidden">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-24 items-center">
+                  <div className="z-10">
+                     <h2 className="text-[100px] md:text-[180px] font-black leading-[0.7] tracking-tighter text-stone-950 mb-12 select-none" style={{ fontFamily: "'Dancing Script', cursive" }}>
+                        <EditableTextArea 
+                          value={data.thanksTitle || "Thanks\nyou"} 
+                          onChange={(v) => setData({ ...data, thanksTitle: v })} 
+                          isViewer={isViewerMode} 
+                        />
+                     </h2>
+                     <div className="text-base md:text-lg font-bold text-stone-800 opacity-60 leading-relaxed max-w-md">
+                        <EditableTextArea 
+                          value={data.thanksBody || "Lorem ipsum dolor sit amet, consectetur adipiscing elit, seodo eiusm odtempor incididunt ut labore et dolore magna aliqua. Ut enim asdfd minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."} 
+                          onChange={(v) => setData({ ...data, thanksBody: v })} 
+                          isViewer={isViewerMode} 
+                        />
+                     </div>
+                  </div>
+                  <div className="flex justify-center mt-12 md:mt-0">
+                     <div className="w-64 h-64 md:w-80 md:h-80 bg-stone-900/5 rounded-full flex items-center justify-center border-4 border-dashed border-stone-950/20">
+                        <Telescope size={100} className="text-stone-950 opacity-40 rotate-12" />
+                     </div>
+                  </div>
+               </div>
+            </div>
+          </SectionWrapper>
+        );
+      default:
+        return null;
+    }
+  };
 
   // Authentication Listener
   useEffect(() => {
@@ -232,23 +1137,102 @@ export default function App() {
       
       // 2. High-fidelity capture with increased scale
       const canvas = await html2canvas(element, {
-        scale: 3, // Set high scale as requested
+        scale: 3, 
         useCORS: true,
         allowTaint: true,
-        backgroundColor: '#f8fafc', 
+        backgroundColor: '#E8B931', 
         logging: false,
         width: element.offsetWidth,
         height: element.offsetHeight,
         onclone: (clonedDoc) => {
-          // Hide interactive buttons and sidebar artifacts
+          // 1. Hide interactive elements
           const buttons = clonedDoc.querySelectorAll('button');
-          buttons.forEach(btn => btn.style.display = 'none');
+          buttons.forEach(btn => {
+            if ((btn as HTMLElement).style) (btn as HTMLElement).style.display = 'none';
+          });
           
-          // Ensure the cloned area has the correct font family
+          // 2. Setup styles for capture
           const report = clonedDoc.getElementById('report-preview-area') as HTMLElement;
           if (report) {
             report.style.fontFamily = "'Inter', sans-serif";
-            report.style.backgroundColor = '#f8fafc';
+            report.style.backgroundColor = '#E8B931';
+          }
+
+          // 3. Robust fix for oklab/oklch colors that html2canvas doesn't support
+          const styleTags = clonedDoc.querySelectorAll('style');
+          styleTags.forEach(style => {
+            if (style.textContent) {
+              style.textContent = style.textContent
+                .replace(/oklch\([^)]*?\)/g, '#000000')
+                .replace(/oklab\([^)]*?\)/g, '#000000')
+                .replace(/color-mix\([^;}]*?\)/g, '#333333')
+                .replace(/in oklch/g, 'in srgb')
+                .replace(/in oklab/g, 'in srgb');
+            }
+          });
+
+          // Also handle external stylesheets by injecting an override
+          const overrideStyle = clonedDoc.createElement('style');
+          overrideStyle.textContent = `
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              transition: none !important;
+              animation: none !important;
+            }
+            :root {
+              --tw-ring-color: #3b82f6 !important;
+              --tw-ring-offset-color: #ffffff !important;
+              --tw-shadow: transparent !important;
+              --tw-shadow-colored: transparent !important;
+              color-scheme: light !important;
+            }
+          `;
+          clonedDoc.head.appendChild(overrideStyle);
+
+          // 4. Force resolution of CSS variables and inline styles
+          const allElements = clonedDoc.getElementsByTagName('*');
+          for (let i = 0; i < allElements.length; i++) {
+            const el = allElements[i] as HTMLElement;
+            
+            // Scrub computed colors if they are modern
+            try {
+              const comp = window.getComputedStyle(el);
+              const props = ['color', 'backgroundColor', 'borderColor', 'outlineColor', 'textDecorationColor', 'columnRuleColor'];
+              props.forEach(prop => {
+                const val = comp.getPropertyValue(prop);
+                if (val.includes('oklch') || val.includes('oklab')) {
+                  el.style.setProperty(prop, '#000000', 'important');
+                }
+              });
+            } catch (e) { /* ignore */ }
+
+            if (el.style) {
+              if (el.style.cssText && (el.style.cssText.includes('oklch') || el.style.cssText.includes('oklab') || el.style.cssText.includes('color-mix'))) {
+                el.style.cssText = el.style.cssText
+                  .replace(/oklch\([^)]*?\)/g, '#000000')
+                  .replace(/oklab\([^)]*?\)/g, '#000000')
+                  .replace(/color-mix\([^;}]*?\)/g, '#333333');
+              }
+              
+              if (el.style.backgroundImage && (el.style.backgroundImage.includes('oklch') || el.style.backgroundImage.includes('oklab'))) {
+                el.style.backgroundImage = 'none';
+                el.style.backgroundColor = '#1a1a1a';
+              }
+            }
+          }
+
+          // 5. Final safety check: scrub the entire body HTML string
+          if (clonedDoc.body.innerHTML.includes('oklab') || clonedDoc.body.innerHTML.includes('oklch')) {
+            try {
+              const cleaned = clonedDoc.body.innerHTML
+                .replace(/oklch\([^)]*?\)/g, '#000000')
+                .replace(/oklab\([^)]*?\)/g, '#000000')
+                .replace(/color-mix\([^;}]*?\)/g, '#333333');
+              clonedDoc.body.innerHTML = cleaned;
+            } catch (e) {
+              console.warn("Body HTML scrubbing failed", e);
+            }
           }
         }
       });
@@ -335,7 +1319,7 @@ export default function App() {
         <header className="fixed top-0 left-0 right-0 h-14 border-b border-stone-800 bg-stone-950/80 backdrop-blur-xl flex items-center justify-between px-4 z-50 md:hidden">
           <div className="flex items-center gap-2">
              <div className="w-8 h-8 bg-mustard rounded-lg flex items-center justify-center text-stone-900"><Mail size={16} /></div>
-             <p className="text-xs font-black uppercase tracking-tighter text-white">MailDash</p>
+             <p className="text-xs font-black uppercase tracking-tighter text-white">Ajunaidi</p>
           </div>
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
@@ -358,8 +1342,8 @@ export default function App() {
         <div className="flex items-center gap-3 p-4 rounded-xl border border-stone-700" style={{ backgroundColor: 'rgba(41, 37, 36, 0.5)' }}>
           <div className="w-10 h-10 bg-mustard rounded-xl flex items-center justify-center text-stone-900 border-2" style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}><Mail size={20} /></div>
           <div>
-            <h1 className="font-bold text-lg leading-tight uppercase tracking-tighter">MailDash</h1>
-            <p className="text-[10px] text-stone-400 uppercase tracking-widest font-black">Report Builder</p>
+            <h1 className="font-bold text-lg leading-tight uppercase tracking-tighter">Ajunaidi</h1>
+            <p className="text-[10px] text-stone-400 uppercase tracking-widest font-black">Ajunaidi Email Report Builder</p>
           </div>
         </div>
 
@@ -628,6 +1612,31 @@ export default function App() {
            </div>
         </Section>
 
+        <Section label="Add Report Sections" icon={<Plus size={14} />}>
+           <div className="grid grid-cols-2 gap-2">
+              {[
+                { type: 'cover', label: 'Cover' },
+                { type: 'overview', label: 'Overview' },
+                { type: 'goals', label: 'Goals' },
+                { type: 'growth', label: 'Growth' },
+                { type: 'deals', label: 'Deals List' },
+                { type: 'metrics', label: 'Metrics Grid' },
+                { type: 'trends', label: 'Trends' },
+                { type: 'funnel', label: 'Funnel' },
+                { type: 'table', label: 'DataTable' },
+                { type: 'footer', label: 'Footer' },
+              ].map((btn) => (
+                <button 
+                  key={btn.type}
+                  onClick={() => addSection(btn.type as any)}
+                  className="flex items-center gap-2 py-2 px-3 bg-stone-800 hover:bg-mustard hover:text-stone-950 transition-all rounded-lg text-[10px] font-black uppercase tracking-tight text-stone-400 text-left"
+                >
+                  <Plus size={12} className="flex-shrink-0" /> {btn.label}
+                </button>
+              ))}
+           </div>
+        </Section>
+
         <Section label="12 & 13. Engagement Summary" icon={<Mail size={14} />}>
            <div className="grid grid-cols-2 gap-2 mb-4">
               <Input label="Emails Sent Goal" type="number" value={data.emailsSentGoal} onChange={(v: string) => setData({...data, emailsSentGoal: Number(v)})} />
@@ -803,264 +1812,27 @@ export default function App() {
         <div 
           ref={reportRef} 
           id="report-preview-area"
-          className="max-w-[1000px] mx-auto space-y-8 bg-transparent pb-32"
+          className="max-w-[1100px] mx-auto space-y-24 bg-[#E8B931] p-12 overflow-hidden shadow-2xl"
           style={{
             fontFamily: "'Inter', sans-serif",
-            lineHeight: '1.15'
+            lineHeight: '1.25'
           } as React.CSSProperties}
         >
-          {/* Header Section: Deep Golden with Badge */}
-          <div className="bg-[#E8B931] rounded-b-[60px] p-16 text-stone-900 relative shadow-2xl overflow-hidden min-h-[400px] flex flex-col justify-end">
-             <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl" />
-             <div className="absolute bottom-0 left-0 w-96 h-96 bg-black/5 rounded-full -ml-32 -mb-32 blur-2xl" />
-             
-             <div className="relative z-10">
-                <div className="inline-flex items-center gap-2 bg-stone-900 text-[#E8B931] px-5 py-2 rounded-full text-[12px] font-black uppercase tracking-[0.2em] mb-8 shadow-xl">
-                  <div className="w-2 h-2 rounded-full bg-[#E8B931] animate-pulse" />
-                  {data.datePeriod}
-                </div>
-                
-                <div className="flex flex-col md:flex-row justify-between items-end gap-12">
-                  <div className="flex-1">
-                    <h1 className="text-6xl md:text-8xl font-black uppercase leading-[0.85] tracking-tighter mb-6">
-                      Email Marketing<br/>Case Study
-                    </h1>
-                    <div className="w-24 h-3 bg-stone-900 rounded-full" />
-                  </div>
-                  {data.clientLogo && (
-                    <div className="bg-white/30 backdrop-blur-xl p-6 rounded-[40px] shadow-2xl border border-white/20">
-                      <img src={data.clientLogo} alt="Client Logo" className="h-20 w-auto object-contain" />
-                    </div>
-                  )}
-                </div>
-                
-                <div className="mt-12 pt-12 border-t border-stone-800/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <p className="text-xl font-black uppercase tracking-widest text-stone-800">
-                    Prepared for: <span className="text-stone-950 underline decoration-4 decoration-stone-900/20">{data.reportTitle}</span>
-                  </p>
-                  <p className="text-sm font-bold uppercase tracking-widest opacity-60">Confidential Report</p>
-                </div>
-             </div>
-          </div>
-
-          {/* Bento Grid: Summary & Recommendations */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-            <BentoCard className="md:col-span-8 flex flex-col justify-between border-l-[16px] border-[#E8B931] bg-white group hover:translate-y-[-4px]">
-               <h3 className="text-2xl font-black uppercase flex items-center gap-4 mb-8">
-                 <div className="w-10 h-10 bg-[#E8B931] rounded-2xl flex items-center justify-center text-stone-900 shadow-lg">
-                   <FileText size={20} />
-                 </div>
-                 Executive Summary
-               </h3>
-               <p className="text-stone-600 text-xl font-medium leading-[1.5] italic pr-8">
-                "{data.summary}"
-               </p>
-               <div className="mt-12 flex items-center gap-3 text-stone-400 font-black uppercase text-[10px] tracking-widest">
-                  <div className="w-8 h-1 bg-slate-100 rounded-full" />
-                  Insight Analysis
-               </div>
-            </BentoCard>
-
-            <BentoCard className="md:col-span-4 bg-amber-50/50 border-amber-200/50 flex flex-col hover:bg-amber-50 group transition-colors">
-               <h3 className="text-sm font-black uppercase text-amber-700 mb-8 flex items-center gap-3 tracking-widest">
-                 <div className="p-2 bg-stone-900 rounded-lg text-[#E8B931] group-hover:scale-110 transition-transform">
-                   <TrendingUp size={14} />
-                 </div>
-                 Strategic Shifts
-               </h3>
-               <div className="space-y-6 flex-1">
-                 {data.recommendations.map((rec, i) => (
-                   <div key={i} className="flex gap-4">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-900 text-[#E8B931] flex items-center justify-center font-black text-xs shadow-md">
-                        {i + 1}
-                      </div>
-                      <p className="text-sm font-bold text-stone-700 leading-tight pt-1 group-hover:text-stone-900">
-                        {rec}
-                      </p>
-                   </div>
-                 ))}
-               </div>
-            </BentoCard>
-          </div>
-
-          {/* Metrics Row: 3 Premium Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {[
-                { label: "Contact Count", val: data.contactCount, icon: <Users size={28}/>, accent: '#E8B931', prefix: '' },
-                { label: "Deal Velocity", val: data.dealCount, icon: <Briefcase size={28}/>, accent: '#1a1a1a', prefix: '' },
-                { label: "Estimated Value", val: data.dealsValue, icon: <TrendingUp size={28}/>, accent: '#E8B931', prefix: '$' }
-              ].map((m, i) => (
-                <BentoCard key={i} className="flex items-center gap-8 group hover:shadow-xl hover:border-[#E8B931] transition-all">
-                   <div className="w-20 h-20 rounded-[28px] flex items-center justify-center text-white shadow-2xl transition-transform group-hover:scale-110 group-hover:rotate-3" style={{ backgroundColor: m.accent }}>
-                     {m.icon}
-                   </div>
-                   <div>
-                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">{m.label}</p>
-                     <p className="text-4xl font-black text-stone-900 tracking-tighter">{m.prefix}{formatNumber(m.val)}</p>
-                   </div>
-                </BentoCard>
-              ))}
-          </div>
-
-          {/* Charts Section: High Fidelity Visuals */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-             <BentoCard className="md:col-span-8 group">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-4">
-                   <div>
-                     <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Sent vs. Opens</h3>
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time-series engagement analysis</p>
-                   </div>
-                   <div className="flex gap-6">
-                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-1.5 rounded-full bg-[#E8B931] group-hover:w-16 transition-all" />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Sent</span>
-                     </div>
-                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-1.5 rounded-full bg-stone-900 group-hover:w-16 transition-all" />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Opens</span>
-                     </div>
-                   </div>
-                </div>
-                <div className="h-[400px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data.growthLabels.map((l, i) => ({ name: l, sent: data.growthContacts[i] || 0, opens: data.growthDeals[i] || 0 }))}>
-                      <defs>
-                        <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#E8B931" stopOpacity={0.4}/>
-                          <stop offset="95%" stopColor="#E8B931" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={10} fontWeight={900} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} fontSize={10} fontWeight={900} />
-                      <Tooltip contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} />
-                      <Area type="monotone" dataKey="sent" stroke="#E8B931" strokeWidth={5} fillOpacity={1} fill="url(#colorSent)" />
-                      <Area type="monotone" dataKey="opens" stroke="#1a1a1a" strokeWidth={5} fill="transparent" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-             </BentoCard>
-
-             <BentoCard className="md:col-span-4 flex flex-col justify-center items-center text-center relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-[#E8B931]/5 rounded-full -mr-12 -mt-12" />
-                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] mb-12 text-slate-400">Database Conversion</h3>
-                <div className="relative w-56 h-56">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={[{ name: 'Contact vs Deal', value: 38 }, { name: 'Untapped', value: 62 }]}
-                        innerRadius={75}
-                        outerRadius={100}
-                        paddingAngle={8}
-                        dataKey="value"
-                        stroke="none"
-                      >
-                        <Cell fill="#E8B931" />
-                        <Cell fill="#f1f5f9" />
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-6xl font-black text-stone-900 tracking-tighter">38%</span>
-                    <span className="text-[12px] font-black text-slate-400 uppercase tracking-widest mt-2">Deal Ratio</span>
-                  </div>
-                </div>
-                <p className="mt-12 text-[11px] font-bold text-stone-500 leading-relaxed max-w-[200px]">
-                  Highest performing bucket identified in <span className="text-stone-900 font-black underline decoration-2 decoration-[#E8B931]">new entries</span>.
-                </p>
-             </BentoCard>
-          </div>
-
-          {/* Email Clicks Funnel */}
-          <BentoCard className="bg-white group overflow-hidden">
-             <div className="grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
-                <div className="md:col-span-7 flex flex-col gap-4">
-                   <div className="bg-[#ef4444] text-white p-8 rounded-[36px] flex justify-between items-center transform -skew-x-2 shadow-xl hover:scale-[1.02] transition-transform">
-                       <div className="flex items-center gap-6">
-                         <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center font-black">01</div>
-                         <span className="text-lg font-black uppercase tracking-widest">Total Emails Sent</span>
-                       </div>
-                       <span className="text-3xl font-black">{formatNumber(data.metricsEmailsSent)}</span>
-                    </div>
-                    <div className="bg-[#1a1a1a] text-white p-8 rounded-[36px] flex justify-between items-center transform -skew-x-2 shadow-xl hover:scale-[1.02] transition-transform ml-4">
-                       <div className="flex items-center gap-6">
-                         <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center font-black">02</div>
-                         <span className="text-lg font-black uppercase tracking-widest">Opened Interactions</span>
-                       </div>
-                       <span className="text-3xl font-black">{formatNumber(data.metricsOpens)}</span>
-                    </div>
-                    <div className="bg-[#E8B931] text-stone-900 p-8 rounded-[36px] flex justify-between items-center transform -skew-x-2 shadow-xl hover:scale-[1.02] transition-transform ml-8 border-4 border-white/50">
-                       <div className="flex items-center gap-6">
-                         <div className="w-12 h-12 bg-stone-900/20 rounded-2xl flex items-center justify-center font-black">03</div>
-                         <span className="text-lg font-black uppercase tracking-widest">Engagement Clicks</span>
-                       </div>
-                       <span className="text-3xl font-black">{formatNumber(data.linkClicksTotal)}</span>
-                    </div>
-                </div>
-                <div className="md:col-span-5 text-center p-12 bg-stone-950 text-[#E8B931] rounded-[60px] border-[12px] border-slate-50 flex flex-col items-center justify-center shadow-[0_45px_70px_-20px_rgba(0,0,0,0.5)]">
-                    <p className="text-[12px] font-black uppercase tracking-[0.4em] mb-6 opacity-60">Funnel Conversion Rate</p>
-                    <p className="text-[120px] font-black italic tracking-tighter leading-none mb-4 -mx-10 select-none">38.16%</p>
-                    <div className="w-32 h-2 bg-[#E8B931] rounded-full mt-4" />
-                </div>
-             </div>
-          </BentoCard>
-
-          {/* Campaigns Performance Table */}
-          <div className="pt-12">
-            <h3 className="text-3xl font-black uppercase mb-12 flex items-center gap-6">
-              <div className="w-1.5 h-12 bg-[#E8B931] rounded-full" />
-              Campaigns Performance
-            </h3>
-            <div className="overflow-x-auto pb-8">
-              <table className="w-full border-separate border-spacing-y-4">
-                <thead>
-                  <tr className="text-left text-[11px] font-black uppercase tracking-[0.3em] text-slate-400">
-                    <th className="px-10 py-6">Identity</th>
-                    <th className="px-10 py-6">Impression</th>
-                    <th className="px-10 py-6">Interaction</th>
-                    <th className="px-10 py-6">Efficiency</th>
-                    <th className="px-10 py-6 text-right">Activity</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.campaignsPerformance.map((row, i) => (
-                    <tr key={i} className="bg-white rounded-[32px] group hover:scale-[1.01] transition-all cursor-default shadow-sm hover:shadow-xl">
-                      <td className="px-10 py-8 rounded-l-[32px] font-black text-stone-950 border-y-2 border-l-2 border-transparent group-hover:border-[#E8B931]/20">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center font-black text-[10px] text-slate-400">
-                            {String(i + 1).padStart(2, '0')}
-                          </div>
-                          {row.name}
-                        </div>
-                      </td>
-                      <td className="px-10 py-8 text-stone-600 font-bold border-y-2 border-transparent group-hover:border-[#E8B931]/20">
-                        {formatNumber(row.sent)}
-                      </td>
-                      <td className="px-10 py-8 text-stone-600 font-bold border-y-2 border-transparent group-hover:border-[#E8B931]/20">
-                        {formatNumber(row.opens)}
-                      </td>
-                      <td className="px-10 py-8 font-black text-[#E8B931] text-lg border-y-2 border-transparent group-hover:border-[#E8B931]/20">
-                        {row.openRate}%
-                      </td>
-                      <td className="px-10 py-8 rounded-r-[32px] text-right font-black text-stone-950 border-y-2 border-r-2 border-transparent group-hover:border-[#E8B931]/20 group-hover:text-[#E8B931]">
-                        {formatNumber(row.linkClicks)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="mt-20 pt-12 border-t border-slate-200 text-center flex flex-col items-center">
-             <div className="w-20 h-20 bg-stone-900 text-[#E8B931] rounded-[24px] flex items-center justify-center mb-6 shadow-2xl">
-               <Mail size={32} />
-             </div>
-             <p className="text-sm font-black uppercase tracking-[0.4em] text-slate-400 mb-2">Automated Report Generator</p>
-             <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest italic">Built for performance markers & growth engineers</p>
-          </div>
+          {/* DYNAMIC SECTIONS */}
+          {data.sections.map((section) => (
+            <React.Fragment key={section.id}>
+              {renderSection(section)}
+            </React.Fragment>
+          ))}
 
         </div>
+
+        <footer className="mt-12 text-center pb-12">
+          <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">
+            app bottom show allright, reserved by Ajunaidi 2026
+          </p>
+        </footer>
+
       </main>
     </div>
   );
@@ -1069,8 +1841,34 @@ export default function App() {
 // Sidebar Helpers
 function BentoCard({ children, className, ...props }: { children: React.ReactNode, className?: string } & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div {...props} className={cn("bg-white border-2 border-slate-100 rounded-[40px] shadow-sm p-8 transition-all duration-300", className)}>
+    <div {...props} className={cn("bg-white rounded-[40px] shadow-sm p-10 transition-all duration-300 border-none", className)}>
       {children}
+    </div>
+  );
+}
+
+function MetricRowProgress({ label, val, max, color }: { label: string, val: number, max: number, color: string }) {
+  return (
+    <div>
+      <div className="flex justify-between text-xs font-black mb-3">
+        <span className="text-stone-400 uppercase tracking-widest">{label}</span>
+        <span className="text-stone-950 underline decoration-4 decoration-stone-200">{formatNumber(val)} / {formatNumber(max)}</span>
+      </div>
+      <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${(val / max) * 100}%`, backgroundColor: color }} />
+      </div>
+    </div>
+  );
+}
+
+function IconMetricRow({ icon, label, val }: { icon: React.ReactNode, label: string, val: number }) {
+  return (
+    <div className="flex items-center justify-between p-6 bg-slate-50 rounded-[32px] group hover:bg-white hover:shadow-lg transition-all">
+       <div className="flex items-center gap-4 text-stone-500 font-bold">
+          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-stone-400 shadow-sm">{icon}</div>
+          {label}
+       </div>
+       <span className="text-2xl font-black text-stone-950">{formatNumber(val)}</span>
     </div>
   );
 }
