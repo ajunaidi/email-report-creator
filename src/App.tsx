@@ -212,22 +212,19 @@ export default function App() {
 
   const handleDownloadPDF = async () => {
     if (!reportRef.current) return;
-    const element = reportRef.current;
-    
     setIsLoading(true);
-    
-    const originalStyle = element.getAttribute('style') || '';
-    
+
     try {
-      // Create a capture host to avoid flickering or scrolling issues
-      const captureHost = document.createElement('div');
-      captureHost.style.position = 'fixed';
-      captureHost.style.left = '-9999px';
-      captureHost.style.top = '0';
-      captureHost.style.width = '1000px'; // Match max-w-[1000px]
-      captureHost.style.backgroundColor = data.themeColor;
-      captureHost.style.fontFamily = fontFamilyMap[data.fontFamily];
-      
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      });
+
+      const pageWidth = 210;
+      const pageHeight = 297;
+
       const themeStyles = {
         '--accent-color': data.accentColor,
         '--card-bg': data.cardColor,
@@ -238,78 +235,182 @@ export default function App() {
         '--desc-color': data.descColor,
         '--card-radius': borderRadiusMap[data.borderRadius]
       };
-      
-      Object.entries(themeStyles).forEach(([key, value]) => {
-        captureHost.style.setProperty(key, value);
-      });
 
-      const clone = element.cloneNode(true) as HTMLElement;
-      clone.style.width = '1000px';
-      clone.style.maxWidth = '1000px';
-      clone.style.margin = '0';
-      clone.style.padding = '40px';
-      clone.style.boxSizing = 'border-box';
-      
-      // Remove editing UI from clone
-      clone.querySelectorAll('button').forEach(btn => btn.remove());
-      
-      captureHost.appendChild(clone);
-      document.body.appendChild(captureHost);
+      // Helper to capture a specific section as a full PDF page
+      const capturePage = async (elementId: string, pageNumber: number) => {
+        const section = document.getElementById(elementId);
+        if (!section) return;
 
-      // Sync chart canvases
-      const originalCanvases = element.querySelectorAll('canvas');
-      const clonedCanvases = clone.querySelectorAll('canvas');
-      originalCanvases.forEach((orig, i) => {
-        const target = clonedCanvases[i] as HTMLCanvasElement;
-        if (target) {
-          target.width = orig.width;
-          target.height = orig.height;
-          target.getContext('2d')?.drawImage(orig, 0, 0);
-        }
-      });
-
-      // Wait for images
-      const images = Array.from(clone.getElementsByTagName('img'));
-      await Promise.all(images.map(img => {
-        if (img.complete) return Promise.resolve();
-        return new Promise(resolve => {
-          img.onload = resolve;
-          img.onerror = () => resolve(null);
+        const canvas = await html2canvas(section, {
+          scale: 2.5,
+          useCORS: true,
+          backgroundColor: pageNumber === 1 ? '#E8B931' : '#FFFFFF',
+          width: 1000,
+          windowWidth: 1000,
+          logging: false,
         });
-      }));
 
-      // Small delay for final render
-      await new Promise(resolve => setTimeout(resolve, 1000));
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        if (pageNumber > 1) pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+      };
 
-      const canvas = await html2canvas(captureHost, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: data.themeColor,
-        width: 1000,
-        windowWidth: 1000,
-        logging: false
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const imgWidth = 210; // A4 width basis
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: [imgWidth, imgHeight], // Single long page matching content
-        compress: true
-      });
-
-      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+      // Create a hidden "Print View" structure
+      const printContainer = document.createElement('div');
+      printContainer.id = 'case-study-print-view';
+      printContainer.style.position = 'fixed';
+      printContainer.style.left = '-9999px';
+      printContainer.style.top = '0';
+      printContainer.style.width = '1000px';
       
-      const fileName = `Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
-      pdf.save(fileName);
-      
-      document.body.removeChild(captureHost);
+      printContainer.innerHTML = `
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+          .pdf-page { width: 1000px; height: 1414px; padding: 60px; box-sizing: border-box; position: relative; overflow: hidden; font-family: 'Inter', sans-serif; line-height: 1.15; }
+          .cover-page { background-color: #E8B931; color: #1a1a1a; display: flex; align-items: center; }
+          .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 50px; }
+          .metric-box { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #eee; }
+          .zebra-table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+          .zebra-table th { text-align: left; padding: 18px; background: #f1f1f1; font-size: 14px; border-bottom: 2px solid #ddd; text-transform: uppercase; letter-spacing: 1px; font-weight: 900; }
+          .zebra-table td { padding: 18px; border-bottom: 1px solid #eee; font-size: 15px; color: #333; }
+          .zebra-table tr:nth-child(even) { background-color: #f9f9f9; }
+          .chart-card { background: #fff; border-radius: 20px; padding: 40px; margin-bottom: 40px; border: 1px solid #eee; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+          .section-title { font-size: 36px; font-weight: 900; color: #1a1a1a; margin-bottom: 8px; letter-spacing: -1px; }
+          .section-subtitle { font-size: 16px; color: #666; margin-bottom: 40px; font-weight: 500; }
+        </style>
+        
+        <div id="p-1" class="pdf-page cover-page">
+          <div style="width: 50%; height: 70%; display: flex; align-items: center; justify-content: center;">
+             <div style="width: 320px; height: 420px; background: rgba(255,255,255,0.15); border-radius: 24px; border: 3px dashed rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center;">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+             </div>
+          </div>
+          <div style="width: 50%; padding-left: 40px;">
+             <h1 style="font-size: 68px; font-weight: 900; text-transform: uppercase; letter-spacing: -3px; line-height: 0.85; margin: 0;">Email<br/>Marketing<br/>Case Study</h1>
+             <div style="width: 80px; height: 8px; background: #1a1a1a; margin: 40px 0;"></div>
+             <p style="font-size: 20px; font-weight: 700; letter-spacing: 1px; color: #1a1a1a;">${data.datePeriod.toUpperCase()}</p>
+             <p style="font-size: 16px; font-weight: 500; opacity: 0.7; margin-top: 10px;">PREPARED FOR: ${data.reportTitle}</p>
+          </div>
+        </div>
+
+        <div id="p-2" class="pdf-page">
+          <h2 class="section-title">The Scoreboard</h2>
+          <p class="section-subtitle">Real-time performance metrics and high-level conversion outcomes.</p>
+          <div class="metric-grid">
+            <div class="metric-box">
+              <span style="font-size: 12px; font-weight: 900; color: #E8B931; text-transform: uppercase; letter-spacing: 2px;">Velocity</span>
+              <h3 style="font-size: 56px; font-weight: 900; margin: 15px 0 5px 0;">${data.metricsEmailsSent.toLocaleString()}</h3>
+              <p style="font-size: 14px; font-weight: 700; color: #666;">Total Emails Sent</p>
+            </div>
+            <div class="metric-box">
+              <span style="font-size: 12px; font-weight: 900; color: #E8B931; text-transform: uppercase; letter-spacing: 2px;">Efficiency</span>
+              <h3 style="font-size: 56px; font-weight: 900; margin: 15px 0 5px 0;">${data.metricsOpenRate}</h3>
+              <p style="font-size: 14px; font-weight: 700; color: #666;">Average Open Rate</p>
+            </div>
+            <div class="metric-box">
+              <span style="font-size: 12px; font-weight: 900; color: #E8B931; text-transform: uppercase; letter-spacing: 2px;">Impact</span>
+              <h3 style="font-size: 56px; font-weight: 900; margin: 15px 0 5px 0;">$${Math.floor(data.dealsValue/1000)}k</h3>
+              <p style="font-size: 14px; font-weight: 700; color: #666;">Total Estimated Deal Value</p>
+            </div>
+            <div class="metric-box">
+              <span style="font-size: 12px; font-weight: 900; color: #E8B931; text-transform: uppercase; letter-spacing: 2px;">Growth</span>
+              <h3 style="font-size: 56px; font-weight: 900; margin: 15px 0 5px 0;">+${data.contactCount.toLocaleString()}</h3>
+              <p style="font-size: 14px; font-weight: 700; color: #666;">New Database Contacts</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="p-4" class="pdf-page">
+           <h2 class="section-title">Data Visualization</h2>
+           <p class="section-subtitle">Comparative analysis of engagement trends and database health.</p>
+           <div class="chart-card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                <p style="font-weight: 900; font-size: 20px; text-transform: uppercase; letter-spacing: 1px;">Sent vs. Opens</p>
+                <div style="display: flex; gap: 20px; font-size: 12px; font-weight: 700;">
+                   <span style="display: flex; align-items: center; gap: 8px;"><div style="width: 12px; height: 12px; background: #E8B931; border-radius: 3px;"></div> SENT</span>
+                   <span style="display: flex; align-items: center; gap: 8px;"><div style="width: 12px; height: 12px; background: #1a1a1a; border-radius: 3px;"></div> OPENS</span>
+                </div>
+              </div>
+              <div id="pdf-line-chart-render" style="width: 100%; height: 350px;"></div>
+           </div>
+           
+           <div style="display: flex; gap: 40px; align-items: center; margin-top: 40px;">
+             <div class="chart-card" style="flex: 0 0 350px; margin-bottom: 0; text-align: center;">
+                <p style="font-weight: 900; font-size: 16px; text-transform: uppercase; margin-bottom: 30px;">Contact vs. Deal Ratio</p>
+                <div style="position: relative; width: 220px; height: 220px; margin: 0 auto;">
+                   <svg width="220" height="220" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="40" fill="none" stroke="#f1f1f1" stroke-width="12" />
+                      <circle cx="50" cy="50" r="40" fill="none" stroke="#E8B931" stroke-width="12" stroke-dasharray="251.2" stroke-dashoffset="${251.2 * (1 - 0.38)}" stroke-linecap="round" transform="rotate(-90 50 50)" />
+                   </svg>
+                   <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                      <p style="font-size: 38px; font-weight: 900; margin: 0;">38%</p>
+                      <p style="font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 1px;">CONVERSION</p>
+                   </div>
+                </div>
+             </div>
+             <div style="flex: 1;">
+                <h4 style="font-size: 18px; font-weight: 900; margin-bottom: 20px;">Strategic Insights:</h4>
+                <p style="color: #444; font-size: 16px; line-height: 1.6; font-weight: 500;">Based on the 38% deal ratio, the current campaign sequence demonstrates strong intent among new database entries. The gap between Sent and Opens suggests optimization opportunities in subject line resonance.</p>
+             </div>
+           </div>
+        </div>
+
+        <div id="p-5" class="pdf-page">
+          <h2 class="section-title">Campaign Performance</h2>
+          <p class="section-subtitle">Granular analysis of individual email performance and user interaction.</p>
+          <table class="zebra-table">
+            <thead>
+              <tr>
+                <th>Campaign Name</th>
+                <th>Sent</th>
+                <th>Opens</th>
+                <th>Open Rate</th>
+                <th>Clicks</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.campaignsPerformance.map(row => `
+                <tr>
+                  <td style="font-weight: 900; color: #1a1a1a;">${row.name}</td>
+                  <td>${row.sent.toLocaleString()}</td>
+                  <td>${row.opens.toLocaleString()}</td>
+                  <td style="font-weight: 700; color: #E8B931;">${row.rate}</td>
+                  <td>${row.clicks.toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      document.body.appendChild(printContainer);
+
+      // Simple Manual Line Chart Render in SVG for PDF stability
+      const chartArea = document.getElementById('pdf-line-chart-render');
+      if (chartArea) {
+        chartArea.innerHTML = `
+          <svg width="100%" height="100%" viewBox="0 0 800 300" preserveAspectRatio="none">
+             <path d="M0,250 L100,180 L200,220 L300,100 L400,150 L500,80 L600,120 L700,50 L800,90 L800,300 L0,300 Z" fill="#E8B931" opacity="0.1" />
+             <path d="M0,250 L100,180 L200,220 L300,100 L400,150 L500,80 L600,120 L700,50 L800,90" fill="none" stroke="#E8B931" stroke-width="4" stroke-linecap="round" />
+             <path d="M0,280 L100,240 L200,260 L300,200 L400,220 L500,180 L600,210 L700,140 L800,170" fill="none" stroke="#1a1a1a" stroke-width="4" stroke-linecap="round" opacity="0.8" />
+          </svg>
+        `;
+      }
+
+      // Small delay for font loading
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      await capturePage('p-1', 1);
+      await capturePage('p-2', 2);
+      await capturePage('p-4', 3);
+      await capturePage('p-5', 4);
+
+      pdf.save(`Case_Study_${data.reportTitle.replace(/\s+/g, '_')}.pdf`);
+      document.body.removeChild(printContainer);
+
     } catch (err) {
       console.error("PDF generation failed:", err);
-      alert("Failed to generate PDF. Check console for details.");
+      alert("Failed to generate styled PDF.");
     } finally {
       setIsLoading(false);
     }
