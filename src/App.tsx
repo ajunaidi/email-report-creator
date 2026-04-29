@@ -7,13 +7,13 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   BarChart3, Users, Mail, TrendingUp, MousePointerClick, 
   LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image, Type, Maximize2, FileText,
-  Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash
+  Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash, PieChart as PieChartIcon, ChevronUp, ChevronDown, LayoutDashboard, Chrome
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { cn } from './lib/utils';
 import { compressImage } from './lib/imageUtils';
-import { ReportData, CampaignPerformanceRow } from './types';
+import { ReportData, CampaignPerformanceRow, FloatingElement } from './types';
 import { MOCK_FULL_DATA } from './mockData';
 import { ReportHeader } from './components/ReportHeader';
 import { SummarySection, MetricCardSmall } from './components/ReportSections';
@@ -35,8 +35,28 @@ import {
 } from 'firebase/auth';
 import { saveReport, getReport } from './services/reportService';
 
+import { AuthPage } from './components/AuthPage';
+import { Dashboard } from './components/Dashboard';
+
 const formatNumber = (val: number | undefined | null) => {
   return (val ?? 0).toLocaleString();
+};
+
+const ICON_MAP: Record<string, React.ReactNode> = {
+  TrendingUp: <TrendingUp />,
+  MousePointerClick: <MousePointerClick />,
+  ExternalLink: <ExternalLink />,
+  LogOut: <LogOut />,
+  Users: <Users />,
+  Mail: <Mail />,
+  Briefcase: <Briefcase />,
+  MessageSquare: <MessageSquare />,
+  Telescope: <Telescope />,
+  BarChart3: <BarChart3 />,
+  PieChart: <PieChartIcon />,
+  Settings2: <Settings2 />,
+  Maximize2: <Maximize2 />,
+  FileText: <FileText />
 };
 
 // --- Editable Components ---
@@ -175,10 +195,28 @@ function ClickableImage({ src, onUpload, className, isViewer }: { src?: string, 
   );
 }
 
-function SectionControls({ onDuplicate, onRemove, isViewer }: { onDuplicate: () => void, onRemove: () => void, isViewer?: boolean }) {
+function SectionControls({ onDuplicate, onRemove, onMoveUp, onMoveDown, isFirst, isLast, isViewer }: { onDuplicate: () => void, onRemove: () => void, onMoveUp: () => void, onMoveDown: () => void, isFirst: boolean, isLast: boolean, isViewer?: boolean }) {
   if (isViewer) return null;
   return (
     <div className="absolute -top-10 right-0 flex gap-2 opacity-0 group-hover/section:opacity-100 transition-opacity z-50">
+      {!isFirst && (
+        <button 
+          onClick={onMoveUp} 
+          className="w-8 h-8 rounded-full bg-white text-stone-600 shadow-xl flex items-center justify-center hover:bg-[#E8B931] hover:text-white transition-all transform hover:scale-110"
+          title="Move Up"
+        >
+          <ChevronUp size={14} />
+        </button>
+      )}
+      {!isLast && (
+        <button 
+          onClick={onMoveDown} 
+          className="w-8 h-8 rounded-full bg-white text-stone-600 shadow-xl flex items-center justify-center hover:bg-[#E8B931] hover:text-white transition-all transform hover:scale-110"
+          title="Move Down"
+        >
+          <ChevronDown size={14} />
+        </button>
+      )}
       <button 
         onClick={onDuplicate} 
         className="w-8 h-8 rounded-full bg-white text-stone-600 shadow-xl flex items-center justify-center hover:bg-[#E8B931] hover:text-white transition-all transform hover:scale-110"
@@ -197,11 +235,102 @@ function SectionControls({ onDuplicate, onRemove, isViewer }: { onDuplicate: () 
   );
 }
 
-function SectionWrapper({ children, onDuplicate, onRemove, isViewer }: { children: React.ReactNode, onDuplicate: () => void, onRemove: () => void, isViewer?: boolean }) {
+function SectionWrapper({ children, onDuplicate, onRemove, onMoveUp, onMoveDown, isFirst, isLast, isViewer, id, bgImage }: { children: React.ReactNode, onDuplicate: () => void, onRemove: () => void, onMoveUp: () => void, onMoveDown: () => void, isFirst: boolean, isLast: boolean, isViewer?: boolean, id?: string, bgImage?: string }) {
   return (
-    <div className="relative group/section">
-      <SectionControls onDuplicate={onDuplicate} onRemove={onRemove} isViewer={isViewer} />
-      {children}
+    <div 
+      id={id} 
+      className="relative group/section print:break-after-page mb-16 print:mb-0 min-h-[500px]"
+    >
+      {bgImage && (
+        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden rounded-[inherit]">
+          <img src={bgImage} className="w-full h-full object-cover opacity-10" alt="" />
+        </div>
+      )}
+      <div className="relative z-10">
+        <SectionControls 
+          onDuplicate={onDuplicate} 
+          onRemove={onRemove} 
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+          isFirst={isFirst}
+          isLast={isLast}
+          isViewer={isViewer} 
+        />
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function FloatingElementComponent({ element, onChange, onRemove, isViewer }: { element: FloatingElement, onChange: (el: FloatingElement) => void, onRemove: () => void, isViewer?: boolean }) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (isViewer) return;
+    setIsDragging(true);
+    setStartPos({ x: e.clientX - element.left, y: e.clientY - element.top });
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        onChange({
+          ...element,
+          left: e.clientX - startPos.x,
+          top: e.clientY - startPos.y
+        });
+      }
+    };
+
+    const handleMouseUp = () => setIsDragging(false);
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, startPos, element, onChange]);
+
+  return (
+    <div 
+      className={cn(
+        "absolute cursor-move select-none group/floating",
+        isDragging && "z-50 ring-2 ring-[#E8B931] ring-offset-2"
+      )}
+      style={{
+        top: `${element.top}px`,
+        left: `${element.left}px`,
+        width: `${element.width}px`,
+        height: `${element.height}px`,
+        zIndex: element.zIndex,
+        transform: `rotate(${element.rotation || 0}deg)`,
+        opacity: element.opacity ?? 1
+      }}
+      onMouseDown={handleMouseDown}
+    >
+      {element.type === 'image' ? (
+        <img src={element.content} className="w-full h-full object-cover rounded-lg shadow-xl" alt="" draggable={false} />
+      ) : (
+        <div className="w-full h-full bg-stone-900/10 border-2 border-stone-900/20 rounded-xl flex items-center justify-center p-4">
+           { element.content === 'circle' && <div className="w-full h-full rounded-full bg-current opacity-20" /> }
+           { element.content === 'square' && <div className="w-full h-full rounded-lg bg-current opacity-20" /> }
+        </div>
+      )}
+      
+      {!isViewer && (
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex gap-1 opacity-0 group-hover/floating:opacity-100 transition-opacity whitespace-nowrap bg-stone-900 text-white p-1 rounded-lg text-[9px] font-black uppercase">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="px-2 hover:text-red-500 transition-colors"
+          >
+            Remove
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -217,6 +346,61 @@ export default function App() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isViewerMode, setIsViewerMode] = useState(false);
+  const [view, setView] = useState<'auth' | 'dashboard' | 'editor'>('auth');
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setIsAuthLoading(false);
+      if (u) {
+        if (view === 'auth') setView('dashboard');
+      } else {
+        setView('auth');
+      }
+    });
+    return () => unsubscribe();
+  }, [view, isViewerMode]);
+
+  // Handle URL params for direct sharing
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sharedId = params.get('reportId');
+    const viewerParam = params.get('viewer') === 'true';
+    if (sharedId) {
+      setReportId(sharedId);
+      if (viewerParam) setIsViewerMode(true);
+      setView('editor');
+      loadReport(sharedId);
+    }
+  }, []);
+
+  const loadReport = async (id: string) => {
+    setIsLoading(true);
+    try {
+      const report = await getReport(id);
+      if (report) {
+        setData(report.data);
+        setReportId(id);
+      }
+    } catch (err) {
+      console.error("Failed to load report", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateNew = () => {
+    setData(MOCK_FULL_DATA);
+    setReportId(null);
+    setView('editor');
+  };
+
+  const handleSelectReport = (id: string) => {
+    setReportId(id);
+    setView('editor');
+    loadReport(id);
+  };
   const reportRef = useRef<HTMLDivElement>(null);
 
   const addSection = (type: any) => {
@@ -238,20 +422,60 @@ export default function App() {
     setData({ ...data, sections: data.sections?.filter(s => s.id !== id) });
   };
 
-  const renderSection = (section: { id: string, type: string }) => {
+  const moveSection = (id: string, direction: 'up' | 'down') => {
+    const index = data.sections?.findIndex(s => s.id === id);
+    if (index === undefined || index === -1) return;
+    const newSections = [...(data.sections || [])];
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= newSections.length) return;
+    [newSections[index], newSections[newIndex]] = [newSections[newIndex], newSections[index]];
+    setData({ ...data, sections: newSections });
+  };
+
+  const renderSection = (section: { id: string, type: string, bgImage?: string }, index: number) => {
+    const sectionsCount = data.sections?.length || 0;
     const commonProps = {
       onDuplicate: () => duplicateSection(section.id),
       onRemove: () => removeSection(section.id),
-      isViewer: isViewerMode
+      onMoveUp: () => moveSection(section.id, 'up'),
+      onMoveDown: () => moveSection(section.id, 'down'),
+      isFirst: index === 0,
+      isLast: index === sectionsCount - 1,
+      isViewer: isViewerMode,
+      id: section.id,
+      bgImage: section.bgImage
     };
 
     switch (section.type) {
       case 'cover':
         return (
-          <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[800px] flex flex-col justify-center relative">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-                  <div>
+          <SectionWrapper key={section.id} id={section.id} {...commonProps}>
+            <div className="min-h-[800px] flex flex-col justify-center relative py-12">
+               {/* Floating Elements Layer */}
+               <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+                  <div className="relative w-full h-full pointer-events-auto">
+                    {(data.floatingElements || []).map((el, idx) => (
+                      <FloatingElementComponent 
+                        key={el.id} 
+                        element={el} 
+                        isViewer={isViewerMode}
+                        onChange={(updated) => {
+                          const copy = [...(data.floatingElements || [])];
+                          copy[idx] = updated;
+                          setData({...data, floatingElements: copy});
+                        }}
+                        onRemove={() => {
+                          const copy = [...(data.floatingElements || [])];
+                          copy.splice(idx, 1);
+                          setData({...data, floatingElements: copy});
+                        }}
+                      />
+                    ))}
+                  </div>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center relative z-10 pointer-events-none">
+                  <div className="pointer-events-auto">
                      <h1 className="text-[60px] sm:text-[100px] md:text-[120px] font-black leading-[0.85] tracking-tighter text-stone-950 mb-4 whitespace-pre-wrap">
                         <EditableTextArea 
                           value={data.reportTitle || "EMAIL\nMARKETING\nCASE STUDY"} 
@@ -263,34 +487,48 @@ export default function App() {
                         <EditableText 
                           value={data.campaignName || "Campaign Overview"} 
                           onChange={(v) => setData({ ...data, campaignName: v })} 
-                          isViewer={isViewerMode}
+                          isViewer={isViewerMode} 
                         />
                      </p>
                      <div className="mt-24">
                         <ClickableImage 
                           src={data.clientLogo}
                           onUpload={(url) => setData({ ...data, clientLogo: url })}
-                          className="w-48 h-48 md:w-64 md:h-64 bg-stone-900/5 rounded-full flex items-center justify-center border-4 border-dashed border-stone-950/20"
+                          className="w-48 h-48 md:w-64 md:h-64 bg-stone-900/5 rounded-3xl flex items-center justify-center border-4 border-dashed border-stone-950/20 shadow-sm transition-all hover:scale-105"
                           isViewer={isViewerMode}
                         />
+                        <p className="text-[10px] font-black uppercase text-stone-400 mt-4 tracking-widest">Main Client Logo / Feature Image</p>
                      </div>
                   </div>
                   
-                  <div className="relative pl-0 md:pl-12 mt-12 md:mt-0">
+                  <div className="relative pl-0 md:pl-12 mt-12 md:mt-0 pointer-events-auto">
                       <div className="space-y-12 relative z-10">
-                         {[
-                           { label: "Emails Sent", val: formatNumber(data.actualSent), sub: "Total campaign distribution", icon: <TrendingUp/> },
-                           { label: "Total Clicks", val: formatNumber(data.actualClicks), sub: "Total link engagement", icon: <MousePointerClick/> },
-                           { label: "Overall Open Rate", val: data.metricsOpenRate, sub: "Recipient engagement rate", icon: <ExternalLink/> },
-                           { label: "Replies / Unsub", val: `${formatNumber(data.actualReplies)} / ${formatNumber(data.unsubscribes)}`, sub: "Interaction vs attrition", icon: <LogOut/> }
-                         ].map((item, idx) => (
-                           <div key={idx} className="flex items-center gap-6 group">
-                              <div className="w-16 h-16 md:w-20 md:h-20 rounded-[24px] bg-stone-900 text-[#E8B931] flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform flex-shrink-0">
-                                 {item.icon}
+                         {(data.heroStats || []).map((item, idx) => (
+                           <div key={item.id} className="flex items-center gap-6 group">
+                              <div className="w-16 h-16 md:w-20 md:h-20 rounded-[28px] bg-stone-900 text-[#E8B931] flex items-center justify-center shadow-xl group-hover:scale-110 group-hover:rotate-3 transition-all flex-shrink-0">
+                                 {ICON_MAP[item.iconName] || <TrendingUp/>}
                               </div>
                               <div className="min-w-0 flex-1">
-                                 <p className="text-xl md:text-2xl font-black text-stone-950 truncate">{item.val}</p>
-                                 <p className="text-sm font-bold text-stone-800 opacity-60 truncate">{item.label} — {item.sub}</p>
+                                 <p className="text-xl md:text-3xl font-black text-stone-950 truncate">
+                                   <EditableText value={item.value} onChange={(v) => {
+                                      const newStats = [...(data.heroStats || [])];
+                                      newStats[idx].value = v;
+                                      setData({...data, heroStats: newStats});
+                                   }} isViewer={isViewerMode} />
+                                 </p>
+                                 <p className="text-sm font-bold text-stone-800 opacity-60 truncate">
+                                    <EditableText value={item.label} onChange={(v) => {
+                                      const newStats = [...(data.heroStats || [])];
+                                      newStats[idx].label = v;
+                                      setData({...data, heroStats: newStats});
+                                   }} isViewer={isViewerMode} />
+                                    {" — "}
+                                    <EditableText value={item.subLabel} onChange={(v) => {
+                                      const newStats = [...(data.heroStats || [])];
+                                      newStats[idx].subLabel = v;
+                                      setData({...data, heroStats: newStats});
+                                   }} isViewer={isViewerMode} />
+                                 </p>
                               </div>
                            </div>
                          ))}
@@ -957,46 +1195,6 @@ export default function App() {
     }
   };
 
-  // Authentication Listener
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setIsViewerMode(params.get('viewer') === 'true');
-    
-    // Auto-hide sidebar on mobile
-    if (window.innerWidth < 768) {
-      setIsSidebarOpen(false);
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Load report from URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get('reportId');
-    if (id) {
-      loadReport(id);
-    }
-  }, []);
-
-  const loadReport = async (id: string) => {
-    setIsLoading(true);
-    try {
-      const report = await getReport(id);
-      if (report) {
-        setData(report.data);
-        setReportId(id);
-      }
-    } catch (err) {
-      console.error("Failed to load report", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleSignIn = async () => {
     const provider = new GoogleAuthProvider();
     try {
@@ -1052,6 +1250,24 @@ export default function App() {
       debouncedSave(data, reportId, user);
     }
   }, [data, user, reportId, debouncedSave]);
+
+  const handleSaveReport = async () => {
+    if (!user) {
+      await handleSignIn();
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const id = await saveReport(reportId, data);
+      setReportId(id);
+      const newUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?reportId=${id}`;
+      window.history.pushState({ path: newUrl }, '', newUrl);
+    } catch (err) {
+      console.error("Failed to save report", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleGenerateShareLink = async () => {
     if (!user) {
@@ -1126,134 +1342,64 @@ export default function App() {
   };
 
   const handleDownloadPDF = async () => {
-    if (!reportRef.current) return;
+    if (!reportRef.current || !data.sections) return;
     setIsLoading(true);
     
-    // 1. Prepare for high-quality capture
     window.scrollTo(0, 0);
 
     try {
-      const element = reportRef.current;
-      
-      // 2. High-fidelity capture with increased scale
-      const canvas = await html2canvas(element, {
-        scale: 3, 
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#E8B931', 
-        logging: false,
-        width: element.offsetWidth,
-        height: element.offsetHeight,
-        onclone: (clonedDoc) => {
-          // 1. Hide interactive elements
-          const buttons = clonedDoc.querySelectorAll('button');
-          buttons.forEach(btn => {
-            if ((btn as HTMLElement).style) (btn as HTMLElement).style.display = 'none';
-          });
-          
-          // 2. Setup styles for capture
-          const report = clonedDoc.getElementById('report-preview-area') as HTMLElement;
-          if (report) {
-            report.style.fontFamily = "'Inter', sans-serif";
-            report.style.backgroundColor = '#E8B931';
-          }
-
-          // 3. Robust fix for oklab/oklch colors that html2canvas doesn't support
-          const styleTags = clonedDoc.querySelectorAll('style');
-          styleTags.forEach(style => {
-            if (style.textContent) {
-              style.textContent = style.textContent
-                .replace(/oklch\([^)]*?\)/g, '#000000')
-                .replace(/oklab\([^)]*?\)/g, '#000000')
-                .replace(/color-mix\([^;}]*?\)/g, '#333333')
-                .replace(/in oklch/g, 'in srgb')
-                .replace(/in oklab/g, 'in srgb');
-            }
-          });
-
-          // Also handle external stylesheets by injecting an override
-          const overrideStyle = clonedDoc.createElement('style');
-          overrideStyle.textContent = `
-            * {
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              transition: none !important;
-              animation: none !important;
-            }
-            :root {
-              --tw-ring-color: #3b82f6 !important;
-              --tw-ring-offset-color: #ffffff !important;
-              --tw-shadow: transparent !important;
-              --tw-shadow-colored: transparent !important;
-              color-scheme: light !important;
-            }
-          `;
-          clonedDoc.head.appendChild(overrideStyle);
-
-          // 4. Force resolution of CSS variables and inline styles
-          const allElements = clonedDoc.getElementsByTagName('*');
-          for (let i = 0; i < allElements.length; i++) {
-            const el = allElements[i] as HTMLElement;
-            
-            // Scrub computed colors if they are modern
-            try {
-              const comp = window.getComputedStyle(el);
-              const props = ['color', 'backgroundColor', 'borderColor', 'outlineColor', 'textDecorationColor', 'columnRuleColor'];
-              props.forEach(prop => {
-                const val = comp.getPropertyValue(prop);
-                if (val.includes('oklch') || val.includes('oklab')) {
-                  el.style.setProperty(prop, '#000000', 'important');
-                }
-              });
-            } catch (e) { /* ignore */ }
-
-            if (el.style) {
-              if (el.style.cssText && (el.style.cssText.includes('oklch') || el.style.cssText.includes('oklab') || el.style.cssText.includes('color-mix'))) {
-                el.style.cssText = el.style.cssText
-                  .replace(/oklch\([^)]*?\)/g, '#000000')
-                  .replace(/oklab\([^)]*?\)/g, '#000000')
-                  .replace(/color-mix\([^;}]*?\)/g, '#333333');
-              }
-              
-              if (el.style.backgroundImage && (el.style.backgroundImage.includes('oklch') || el.style.backgroundImage.includes('oklab'))) {
-                el.style.backgroundImage = 'none';
-                el.style.backgroundColor = '#1a1a1a';
-              }
-            }
-          }
-
-          // 5. Final safety check: scrub the entire body HTML string
-          if (clonedDoc.body.innerHTML.includes('oklab') || clonedDoc.body.innerHTML.includes('oklch')) {
-            try {
-              const cleaned = clonedDoc.body.innerHTML
-                .replace(/oklch\([^)]*?\)/g, '#000000')
-                .replace(/oklab\([^)]*?\)/g, '#000000')
-                .replace(/color-mix\([^;}]*?\)/g, '#333333');
-              clonedDoc.body.innerHTML = cleaned;
-            } catch (e) {
-              console.warn("Body HTML scrubbing failed", e);
-            }
-          }
-        }
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const imgWidth = 210; // A4 width basis
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
       const pdf = new jsPDF({
         orientation: 'p',
         unit: 'mm',
-        format: [imgWidth, imgHeight], // Custom infographic size
+        format: 'a4',
         compress: true
       });
 
-      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      for (let i = 0; i < data.sections.length; i++) {
+        const section = data.sections[i];
+        const sectionEl = document.getElementById(section.id);
+        
+        if (!sectionEl) continue;
+
+        const canvas = await html2canvas(sectionEl, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: data.themeColor,
+          logging: false,
+          onclone: (clonedDoc) => {
+            // Apply fix for modern CSS colors in the clone
+            const style = clonedDoc.createElement('style');
+            style.textContent = `
+              * { transition: none !important; animation: none !important; }
+              [data-chart] { visibility: visible !important; }
+            `;
+            clonedDoc.head.appendChild(style);
+          }
+        });
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.9);
+        const margin = 10;
+        const imgWidth = pageWidth - (margin * 2);
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        if (i > 0) pdf.addPage();
+        
+        // Centering vertically if the content is short
+        const yPos = imgHeight < (pageHeight - margin * 2) 
+          ? (pageHeight - imgHeight) / 2 
+          : margin;
+
+        pdf.addImage(imgData, 'JPEG', margin, yPos, imgWidth, Math.min(imgHeight, pageHeight - margin * 2));
+      }
       
-      const fileName = `Infographic_Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+      const fileName = `Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
       pdf.save(fileName);
     } catch (err) {
-      console.error("High-fidelity PDF generation failed:", err);
+      console.error("PDF generation failed:", err);
       alert("Failed to generate PDF. Check console for details.");
     } finally {
       setIsLoading(false);
@@ -1312,6 +1458,22 @@ export default function App() {
     mono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
   };
 
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-stone-950 flex items-center justify-center">
+        <Loader2 className="animate-spin text-[#E8B931]" size={48} />
+      </div>
+    );
+  }
+
+  if (view === 'auth' && !isViewerMode) {
+    return <AuthPage onSuccess={() => setView('dashboard')} />;
+  }
+
+  if (view === 'dashboard' && !isViewerMode) {
+    return <Dashboard onNewReport={handleCreateNew} onSelectReport={handleSelectReport} />;
+  }
+
   return (
     <div className="flex h-screen overflow-hidden relative" style={{ backgroundColor: data.themeColor }}>
       {/* Top bar for mobile/desktop layout control */}
@@ -1340,12 +1502,43 @@ export default function App() {
         )}
       >
         <div className="flex items-center gap-3 p-4 rounded-xl border border-stone-700" style={{ backgroundColor: 'rgba(41, 37, 36, 0.5)' }}>
-          <div className="w-10 h-10 bg-mustard rounded-xl flex items-center justify-center text-stone-900 border-2" style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}><Mail size={20} /></div>
+          <button 
+            onClick={() => setView('dashboard')}
+            className="w-10 h-10 bg-mustard rounded-xl flex items-center justify-center text-stone-900 border-2" 
+            style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}
+            title="Back to Dashboard"
+          >
+            <LayoutDashboard size={20} />
+          </button>
           <div>
             <h1 className="font-bold text-lg leading-tight uppercase tracking-tighter">Ajunaidi</h1>
-            <p className="text-[10px] text-stone-400 uppercase tracking-widest font-black">Ajunaidi Email Report Builder</p>
+            <p className="text-[10px] text-stone-400 uppercase tracking-widest font-black">Email Report Builder</p>
           </div>
         </div>
+
+        <Section label="Cloud Storage" icon={<ExternalLink size={14} />}>
+           <div className="space-y-3">
+             <button 
+               onClick={async () => {
+                 await handleSaveReport();
+                 alert('Report saved to your account successfully!');
+               }}
+               className="w-full h-12 bg-stone-800 rounded-xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest hover:bg-stone-700 transition-all border border-stone-700"
+             >
+               <Save size={16} className="text-mustard" />
+               Save to Account
+             </button>
+             <button 
+               onClick={() => {
+                 alert('Google Drive integration requires an API Key. Please configure GOOGLE_DRIVE_API_KEY in your settings.');
+               }}
+               className="w-full h-12 bg-white text-stone-950 rounded-xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest hover:bg-stone-50 transition-all shadow-lg"
+             >
+               <Chrome size={16} className="text-[#4285F4]" />
+               Upload to Google Drive
+             </button>
+           </div>
+        </Section>
 
         {/* User & Sharing Controls */}
         <div className="p-4 rounded-xl border border-stone-700 space-y-3" style={{ backgroundColor: 'rgba(41, 37, 36, 0.8)' }}>
@@ -1535,6 +1728,168 @@ export default function App() {
              <ImageUploader label="Funnel Chart" value={data.funnelChartImage} onUpload={(url) => setData({...data, funnelChartImage: url})} onClear={() => setData({...data, funnelChartImage: ""})} />
              <ImageUploader label="Engagement Trend Chart" value={data.engagementTrendChartImage} onUpload={(url) => setData({...data, engagementTrendChartImage: url})} onClear={() => setData({...data, engagementTrendChartImage: ""})} />
            </div>
+        </Section>
+
+        <Section label="Graphic Elements" icon={<Palette size={14} />}>
+          <p className="text-[10px] text-stone-500 mb-4 px-1 uppercase font-black tracking-tighter italic">Floating icons, shapes or stickers</p>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              <button 
+                onClick={() => {
+                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'circle', top: 100, left: 100, width: 100, height: 100, zIndex: 1, opacity: 0.5 };
+                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
+                }}
+                className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
+              >
+                + Circle
+              </button>
+              <button 
+                onClick={() => {
+                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'square', top: 120, left: 120, width: 100, height: 100, zIndex: 1, opacity: 0.5 };
+                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
+                }}
+                className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
+              >
+                + Square
+              </button>
+            </div>
+            
+            <ImageUploader 
+              label="Add Floating Image" 
+              value="" 
+              onUpload={(url) => {
+                const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'image', content: url, top: 150, left: 150, width: 200, height: 200, zIndex: 5 };
+                setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
+              }} 
+              onClear={() => {}}
+            />
+
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {(data.floatingElements || []).map((el, i) => (
+                <div key={el.id} className="p-2 bg-stone-900 border border-stone-800 rounded-lg flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-stone-800 rounded flex items-center justify-center text-[10px] text-mustard font-black">
+                      {i + 1}
+                    </div>
+                    <span className="text-[10px] text-stone-400 uppercase font-bold">{el.type}</span>
+                  </div>
+                  <div className="flex gap-1">
+                    <button 
+                      onClick={() => {
+                        const copy = [...(data.floatingElements || [])];
+                        // change z-index or something?
+                        copy[i] = { ...el, zIndex: (el.zIndex || 0) + 1 };
+                        setData({...data, floatingElements: copy});
+                      }}
+                      title="Bring Forward"
+                      className="text-stone-500 hover:text-white"
+                    >
+                      <ChevronUp size={12} />
+                    </button>
+                    <button 
+                      onClick={() => {
+                        const copy = [...(data.floatingElements || [])];
+                        copy.splice(i, 1);
+                        setData({...data, floatingElements: copy});
+                      }}
+                      className="text-stone-500 hover:text-red-500"
+                    >
+                      <Trash size={12} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Section>
+
+        <Section label="Section Management" icon={<Maximize2 size={14} />}>
+          <p className="text-[10px] text-stone-500 mb-4 px-1 uppercase font-black tracking-tighter">Adjust background images for each page</p>
+          <div className="space-y-4">
+            {(data.sections || []).map((section, idx) => (
+              <div key={section.id} className="p-3 bg-stone-800 rounded-lg border border-stone-700 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black uppercase text-stone-500">Page {idx + 1}: {section.type}</span>
+                </div>
+                <ImageUploader 
+                  label="Background Image" 
+                  value={section.bgImage} 
+                  onUpload={(url) => {
+                    const copy = [...(data.sections || [])];
+                    copy[idx] = { ...copy[idx], bgImage: url };
+                    setData({...data, sections: copy});
+                  }} 
+                  onClear={() => {
+                    const copy = [...(data.sections || [])];
+                    copy[idx] = { ...copy[idx], bgImage: "" };
+                    setData({...data, sections: copy});
+                  }} 
+                />
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section label="Hero Section Stats" icon={<Telescope size={14} />}>
+          <div className="space-y-4">
+            {(data.heroStats || []).map((stat, idx) => (
+              <div key={stat.id} className="p-3 bg-stone-800 rounded-lg border border-stone-700 space-y-2 relative group-item">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black uppercase text-stone-500">Stat {idx + 1}</span>
+                  <button 
+                    onClick={() => {
+                      const copy = [...(data.heroStats || [])];
+                      copy.splice(idx, 1);
+                      setData({...data, heroStats: copy});
+                    }}
+                    className="text-stone-500 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+                <Input label="Value" value={stat.value} onChange={(v) => {
+                  const copy = [...(data.heroStats || [])];
+                  copy[idx].value = v;
+                  setData({...data, heroStats: copy});
+                }} />
+                <Input label="Label" value={stat.label} onChange={(v) => {
+                  const copy = [...(data.heroStats || [])];
+                  copy[idx].label = v;
+                  setData({...data, heroStats: copy});
+                }} />
+                <Input label="Sub-label" value={stat.subLabel} onChange={(v) => {
+                  const copy = [...(data.heroStats || [])];
+                  copy[idx].subLabel = v;
+                  setData({...data, heroStats: copy});
+                }} />
+                <div>
+                  <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">Icon</label>
+                  <select 
+                    value={stat.iconName} 
+                    onChange={e => {
+                      const copy = [...(data.heroStats || [])];
+                      copy[idx].iconName = e.target.value;
+                      setData({...data, heroStats: copy});
+                    }}
+                    className="w-full bg-stone-900 border border-stone-700 rounded h-8 px-2 text-[10px] text-white outline-none"
+                  >
+                    {Object.keys(ICON_MAP).map(icon => (
+                      <option key={icon} value={icon}>{icon}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ))}
+            <button 
+              onClick={() => {
+                const newStat = { id: `hs-${Date.now()}`, label: 'New Stat', value: '0', subLabel: 'Description', iconName: 'TrendingUp' };
+                setData({...data, heroStats: [...(data.heroStats || []), newStat]});
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-stone-700 rounded-lg text-stone-500 hover:text-mustard hover:border-mustard transition-all text-[10px] font-black uppercase tracking-widest"
+            >
+              <Plus size={14} /> Add Hero Stat
+            </button>
+          </div>
         </Section>
 
         <Section label="1. Project Basics" icon={<Settings2 size={14} />}>
@@ -1819,9 +2174,9 @@ export default function App() {
           } as React.CSSProperties}
         >
           {/* DYNAMIC SECTIONS */}
-          {data.sections.map((section) => (
+          {data.sections.map((section, idx) => (
             <React.Fragment key={section.id}>
-              {renderSection(section)}
+              {renderSection(section, idx)}
             </React.Fragment>
           ))}
 

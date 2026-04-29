@@ -9,7 +9,8 @@ import {
   where,
   getDocs,
   Timestamp,
-  writeBatch
+  writeBatch,
+  deleteDoc
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { ReportData } from '../types';
@@ -121,4 +122,9 @@ export const getUserReports = async () => {
     id: doc.id,
     ...doc.data()
   })) as ReportDocument[];
+};
+
+export const deleteReport = async (reportId: string) => {
+  const reportRef = doc(db, 'reports', reportId);
+  await deleteDoc(reportRef);
 };

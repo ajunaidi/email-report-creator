@@ -4,6 +4,12 @@ export const MOCK_FULL_DATA: ReportData = {
   reportTitle: "Ajunaidi Email Report Builder",
   datePeriod: "03/24/2026 - 04/22/2026",
   tags: ["General Email Marketing", "eCommerce Email Marketing"],
+  heroStats: [
+    { id: 'hs1', label: "Emails Sent", value: "6,344", subLabel: "Total campaign distribution", iconName: "TrendingUp" },
+    { id: 'hs2', label: "Total Clicks", value: "8,633", subLabel: "Total link engagement", iconName: "MousePointerClick" },
+    { id: 'hs3', label: "Overall Open Rate", value: "93.3%", subLabel: "Recipient engagement rate", iconName: "ExternalLink" },
+    { id: 'hs4', label: "Replies / Unsub", value: "9,124 / 952", subLabel: "Interaction vs attrition", iconName: "LogOut" }
+  ],
   
   dealsGoal: 10000,
   dealsCount: 1637,

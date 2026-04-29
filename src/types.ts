@@ -28,10 +28,33 @@ export interface CampaignPerformanceRow {
   softBounces: number;
 }
 
+export interface HeroStat {
+  id: string;
+  label: string;
+  value: string;
+  subLabel: string;
+  iconName: string;
+}
+
+export interface FloatingElement {
+  id: string;
+  type: 'image' | 'shape';
+  content: string; // URL or shape ID
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  zIndex: number;
+  opacity?: number;
+}
+
 export interface ReportData {
   reportTitle: string;
   datePeriod: string;
   tags: string[];
+  heroStats?: HeroStat[];
+  floatingElements?: FloatingElement[];
   
   // Row 1
   dealsGoal: number;
@@ -129,5 +152,5 @@ export interface ReportData {
   thanksTitle?: string;
   thanksBody?: string;
 
-  sections?: { id: string, type: 'cover' | 'overview' | 'goals' | 'growth' | 'deals' | 'metrics' | 'trends' | 'funnel' | 'table' | 'footer' }[];
+  sections: { id: string, type: 'cover' | 'overview' | 'goals' | 'growth' | 'deals' | 'metrics' | 'trends' | 'funnel' | 'table' | 'footer', bgImage?: string }[];
 }
