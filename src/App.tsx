@@ -13,6 +13,12 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { cn } from './lib/utils';
 import { compressImage } from './lib/imageUtils';
+
+const formatNumber = (val: number | undefined | null) => {
+  return (val ?? 0).toLocaleString();
+};
+
+export interface ReportDataWithOptional extends ReportData {}
 import { ReportData, CampaignPerformanceRow } from './types';
 import { MOCK_FULL_DATA } from './mockData';
 import { ReportHeader } from './components/ReportHeader';
@@ -20,6 +26,10 @@ import { SummarySection, MetricCardSmall } from './components/ReportSections';
 import { EmailPerformanceTable, GoalTracker } from './components/TableSections';
 import { GrowthChart, DistributionChart, FunnelDisplay } from './components/ChartSections';
 import { Line } from 'react-chartjs-2';
+import { 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, BarChart, Bar
+} from 'recharts';
 import debounce from 'lodash.debounce';
 import { auth } from './lib/firebase';
 import { 
@@ -213,204 +223,54 @@ export default function App() {
   const handleDownloadPDF = async () => {
     if (!reportRef.current) return;
     setIsLoading(true);
+    
+    // 1. Prepare for high-quality capture
+    window.scrollTo(0, 0);
 
     try {
+      const element = reportRef.current;
+      
+      // 2. High-fidelity capture with increased scale
+      const canvas = await html2canvas(element, {
+        scale: 3, // Set high scale as requested
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#f8fafc', 
+        logging: false,
+        width: element.offsetWidth,
+        height: element.offsetHeight,
+        onclone: (clonedDoc) => {
+          // Hide interactive buttons and sidebar artifacts
+          const buttons = clonedDoc.querySelectorAll('button');
+          buttons.forEach(btn => btn.style.display = 'none');
+          
+          // Ensure the cloned area has the correct font family
+          const report = clonedDoc.getElementById('report-preview-area') as HTMLElement;
+          if (report) {
+            report.style.fontFamily = "'Inter', sans-serif";
+            report.style.backgroundColor = '#f8fafc';
+          }
+        }
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const imgWidth = 210; // A4 width basis
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
       const pdf = new jsPDF({
         orientation: 'p',
         unit: 'mm',
-        format: 'a4',
+        format: [imgWidth, imgHeight], // Custom infographic size
         compress: true
       });
 
-      const pageWidth = 210;
-      const pageHeight = 297;
-
-      const themeStyles = {
-        '--accent-color': data.accentColor,
-        '--card-bg': data.cardColor,
-        '--report-text': data.textColor,
-        '--h1-color': data.h1Color,
-        '--h2-color': data.h2Color,
-        '--h3-color': data.h3Color,
-        '--desc-color': data.descColor,
-        '--card-radius': borderRadiusMap[data.borderRadius]
-      };
-
-      // Helper to capture a specific section as a full PDF page
-      const capturePage = async (elementId: string, pageNumber: number) => {
-        const section = document.getElementById(elementId);
-        if (!section) return;
-
-        const canvas = await html2canvas(section, {
-          scale: 2.5,
-          useCORS: true,
-          backgroundColor: pageNumber === 1 ? '#E8B931' : '#FFFFFF',
-          width: 1000,
-          windowWidth: 1000,
-          logging: false,
-        });
-
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        if (pageNumber > 1) pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
-      };
-
-      // Create a hidden "Print View" structure
-      const printContainer = document.createElement('div');
-      printContainer.id = 'case-study-print-view';
-      printContainer.style.position = 'fixed';
-      printContainer.style.left = '-9999px';
-      printContainer.style.top = '0';
-      printContainer.style.width = '1000px';
+      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
       
-      printContainer.innerHTML = `
-        <style>
-          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-          .pdf-page { width: 1000px; height: 1414px; padding: 60px; box-sizing: border-box; position: relative; overflow: hidden; font-family: 'Inter', sans-serif; line-height: 1.15; }
-          .cover-page { background-color: #E8B931; color: #1a1a1a; display: flex; align-items: center; }
-          .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 50px; }
-          .metric-box { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #eee; }
-          .zebra-table { width: 100%; border-collapse: collapse; margin-top: 30px; }
-          .zebra-table th { text-align: left; padding: 18px; background: #f1f1f1; font-size: 14px; border-bottom: 2px solid #ddd; text-transform: uppercase; letter-spacing: 1px; font-weight: 900; }
-          .zebra-table td { padding: 18px; border-bottom: 1px solid #eee; font-size: 15px; color: #333; }
-          .zebra-table tr:nth-child(even) { background-color: #f9f9f9; }
-          .chart-card { background: #fff; border-radius: 20px; padding: 40px; margin-bottom: 40px; border: 1px solid #eee; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
-          .section-title { font-size: 36px; font-weight: 900; color: #1a1a1a; margin-bottom: 8px; letter-spacing: -1px; }
-          .section-subtitle { font-size: 16px; color: #666; margin-bottom: 40px; font-weight: 500; }
-        </style>
-        
-        <div id="p-1" class="pdf-page cover-page">
-          <div style="width: 50%; height: 70%; display: flex; align-items: center; justify-content: center;">
-             <div style="width: 320px; height: 420px; background: rgba(255,255,255,0.15); border-radius: 24px; border: 3px dashed rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center;">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-             </div>
-          </div>
-          <div style="width: 50%; padding-left: 40px;">
-             <h1 style="font-size: 68px; font-weight: 900; text-transform: uppercase; letter-spacing: -3px; line-height: 0.85; margin: 0;">Email<br/>Marketing<br/>Case Study</h1>
-             <div style="width: 80px; height: 8px; background: #1a1a1a; margin: 40px 0;"></div>
-             <p style="font-size: 20px; font-weight: 700; letter-spacing: 1px; color: #1a1a1a;">${data.datePeriod.toUpperCase()}</p>
-             <p style="font-size: 16px; font-weight: 500; opacity: 0.7; margin-top: 10px;">PREPARED FOR: ${data.reportTitle}</p>
-          </div>
-        </div>
-
-        <div id="p-2" class="pdf-page">
-          <h2 class="section-title">The Scoreboard</h2>
-          <p class="section-subtitle">Real-time performance metrics and high-level conversion outcomes.</p>
-          <div class="metric-grid">
-            <div class="metric-box">
-              <span style="font-size: 12px; font-weight: 900; color: #E8B931; text-transform: uppercase; letter-spacing: 2px;">Velocity</span>
-              <h3 style="font-size: 56px; font-weight: 900; margin: 15px 0 5px 0;">${data.metricsEmailsSent.toLocaleString()}</h3>
-              <p style="font-size: 14px; font-weight: 700; color: #666;">Total Emails Sent</p>
-            </div>
-            <div class="metric-box">
-              <span style="font-size: 12px; font-weight: 900; color: #E8B931; text-transform: uppercase; letter-spacing: 2px;">Efficiency</span>
-              <h3 style="font-size: 56px; font-weight: 900; margin: 15px 0 5px 0;">${data.metricsOpenRate}</h3>
-              <p style="font-size: 14px; font-weight: 700; color: #666;">Average Open Rate</p>
-            </div>
-            <div class="metric-box">
-              <span style="font-size: 12px; font-weight: 900; color: #E8B931; text-transform: uppercase; letter-spacing: 2px;">Impact</span>
-              <h3 style="font-size: 56px; font-weight: 900; margin: 15px 0 5px 0;">$${Math.floor(data.dealsValue/1000)}k</h3>
-              <p style="font-size: 14px; font-weight: 700; color: #666;">Total Estimated Deal Value</p>
-            </div>
-            <div class="metric-box">
-              <span style="font-size: 12px; font-weight: 900; color: #E8B931; text-transform: uppercase; letter-spacing: 2px;">Growth</span>
-              <h3 style="font-size: 56px; font-weight: 900; margin: 15px 0 5px 0;">+${data.contactCount.toLocaleString()}</h3>
-              <p style="font-size: 14px; font-weight: 700; color: #666;">New Database Contacts</p>
-            </div>
-          </div>
-        </div>
-
-        <div id="p-4" class="pdf-page">
-           <h2 class="section-title">Data Visualization</h2>
-           <p class="section-subtitle">Comparative analysis of engagement trends and database health.</p>
-           <div class="chart-card">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-                <p style="font-weight: 900; font-size: 20px; text-transform: uppercase; letter-spacing: 1px;">Sent vs. Opens</p>
-                <div style="display: flex; gap: 20px; font-size: 12px; font-weight: 700;">
-                   <span style="display: flex; align-items: center; gap: 8px;"><div style="width: 12px; height: 12px; background: #E8B931; border-radius: 3px;"></div> SENT</span>
-                   <span style="display: flex; align-items: center; gap: 8px;"><div style="width: 12px; height: 12px; background: #1a1a1a; border-radius: 3px;"></div> OPENS</span>
-                </div>
-              </div>
-              <div id="pdf-line-chart-render" style="width: 100%; height: 350px;"></div>
-           </div>
-           
-           <div style="display: flex; gap: 40px; align-items: center; margin-top: 40px;">
-             <div class="chart-card" style="flex: 0 0 350px; margin-bottom: 0; text-align: center;">
-                <p style="font-weight: 900; font-size: 16px; text-transform: uppercase; margin-bottom: 30px;">Contact vs. Deal Ratio</p>
-                <div style="position: relative; width: 220px; height: 220px; margin: 0 auto;">
-                   <svg width="220" height="220" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="40" fill="none" stroke="#f1f1f1" stroke-width="12" />
-                      <circle cx="50" cy="50" r="40" fill="none" stroke="#E8B931" stroke-width="12" stroke-dasharray="251.2" stroke-dashoffset="${251.2 * (1 - 0.38)}" stroke-linecap="round" transform="rotate(-90 50 50)" />
-                   </svg>
-                   <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-                      <p style="font-size: 38px; font-weight: 900; margin: 0;">38%</p>
-                      <p style="font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 1px;">CONVERSION</p>
-                   </div>
-                </div>
-             </div>
-             <div style="flex: 1;">
-                <h4 style="font-size: 18px; font-weight: 900; margin-bottom: 20px;">Strategic Insights:</h4>
-                <p style="color: #444; font-size: 16px; line-height: 1.6; font-weight: 500;">Based on the 38% deal ratio, the current campaign sequence demonstrates strong intent among new database entries. The gap between Sent and Opens suggests optimization opportunities in subject line resonance.</p>
-             </div>
-           </div>
-        </div>
-
-        <div id="p-5" class="pdf-page">
-          <h2 class="section-title">Campaign Performance</h2>
-          <p class="section-subtitle">Granular analysis of individual email performance and user interaction.</p>
-          <table class="zebra-table">
-            <thead>
-              <tr>
-                <th>Campaign Name</th>
-                <th>Sent</th>
-                <th>Opens</th>
-                <th>Open Rate</th>
-                <th>Clicks</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.campaignsPerformance.map(row => `
-                <tr>
-                  <td style="font-weight: 900; color: #1a1a1a;">${row.name}</td>
-                  <td>${row.sent.toLocaleString()}</td>
-                  <td>${row.opens.toLocaleString()}</td>
-                  <td style="font-weight: 700; color: #E8B931;">${row.rate}</td>
-                  <td>${row.clicks.toLocaleString()}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      `;
-
-      document.body.appendChild(printContainer);
-
-      // Simple Manual Line Chart Render in SVG for PDF stability
-      const chartArea = document.getElementById('pdf-line-chart-render');
-      if (chartArea) {
-        chartArea.innerHTML = `
-          <svg width="100%" height="100%" viewBox="0 0 800 300" preserveAspectRatio="none">
-             <path d="M0,250 L100,180 L200,220 L300,100 L400,150 L500,80 L600,120 L700,50 L800,90 L800,300 L0,300 Z" fill="#E8B931" opacity="0.1" />
-             <path d="M0,250 L100,180 L200,220 L300,100 L400,150 L500,80 L600,120 L700,50 L800,90" fill="none" stroke="#E8B931" stroke-width="4" stroke-linecap="round" />
-             <path d="M0,280 L100,240 L200,260 L300,200 L400,220 L500,180 L600,210 L700,140 L800,170" fill="none" stroke="#1a1a1a" stroke-width="4" stroke-linecap="round" opacity="0.8" />
-          </svg>
-        `;
-      }
-
-      // Small delay for font loading
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      await capturePage('p-1', 1);
-      await capturePage('p-2', 2);
-      await capturePage('p-4', 3);
-      await capturePage('p-5', 4);
-
-      pdf.save(`Case_Study_${data.reportTitle.replace(/\s+/g, '_')}.pdf`);
-      document.body.removeChild(printContainer);
-
+      const fileName = `Infographic_Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+      pdf.save(fileName);
     } catch (err) {
-      console.error("PDF generation failed:", err);
-      alert("Failed to generate styled PDF.");
+      console.error("High-fidelity PDF generation failed:", err);
+      alert("Failed to generate PDF. Check console for details.");
     } finally {
       setIsLoading(false);
     }
@@ -917,7 +777,7 @@ export default function App() {
       </aside>
 
       {/* Main Preview Area */}
-      <main className="flex-1 overflow-y-auto px-4 pt-20 pb-40 md:py-8 md:px-12 scroll-smooth relative">
+      <main className="flex-1 overflow-y-auto px-4 pt-20 pb-40 md:py-8 md:px-12 scroll-smooth relative bg-slate-50">
         {/* Mobile Sidebar Toggle */}
         {!isViewerMode && (
           <button 
@@ -939,163 +799,266 @@ export default function App() {
 
         {/* Empty state for clean viewer mode spacing */}
         {isViewerMode && <div className="h-8" />}
+        
         <div 
           ref={reportRef} 
           id="report-preview-area"
-          className="max-w-[1000px] mx-auto space-y-8 bg-transparent"
+          className="max-w-[1000px] mx-auto space-y-8 bg-transparent pb-32"
           style={{
-            '--accent-color': data.accentColor,
-            '--card-bg': data.cardColor,
-            '--report-text': data.textColor,
-            '--h1-color': data.h1Color,
-            '--h2-color': data.h2Color,
-            '--h3-color': data.h3Color,
-            '--desc-color': data.descColor,
-            '--card-radius': borderRadiusMap[data.borderRadius],
-            fontFamily: fontFamilyMap[data.fontFamily]
+            fontFamily: "'Inter', sans-serif",
+            lineHeight: '1.15'
           } as React.CSSProperties}
         >
-          
-          <ReportHeader title={data.reportTitle} date={data.datePeriod} activeTab="General" logo={data.clientLogo} />
-
-          {/* Row 1: Goals */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <GoalTracker 
-              title="Deals and Conversion Goals"
-              label1="Contact Count" val1={data.conversionCount} max1={data.conversionGoal} color1={data.accentColor}
-              label2="Deal Count" val2={data.dealsCount} max2={data.dealsGoal} color2={data.textColor}
-            />
-            <div className="report-card flex flex-col justify-between">
-              <h3 className="font-bold text-stone-900 text-xs uppercase tracking-wide mb-4">List of Deals and Contacts</h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between text-xs font-bold">
-                   <div className="flex items-center gap-2 text-stone-500"><Users size={14}/> Contact Count</div>
-                   <span className="text-stone-800">{data.listContacts.toLocaleString()}</span>
+          {/* Header Section: Deep Golden with Badge */}
+          <div className="bg-[#E8B931] rounded-b-[60px] p-16 text-stone-900 relative shadow-2xl overflow-hidden min-h-[400px] flex flex-col justify-end">
+             <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl" />
+             <div className="absolute bottom-0 left-0 w-96 h-96 bg-black/5 rounded-full -ml-32 -mb-32 blur-2xl" />
+             
+             <div className="relative z-10">
+                <div className="inline-flex items-center gap-2 bg-stone-900 text-[#E8B931] px-5 py-2 rounded-full text-[12px] font-black uppercase tracking-[0.2em] mb-8 shadow-xl">
+                  <div className="w-2 h-2 rounded-full bg-[#E8B931] animate-pulse" />
+                  {data.datePeriod}
                 </div>
-                <div className="flex items-center justify-between text-xs font-bold">
-                   <div className="flex items-center gap-2 text-stone-500"><Briefcase size={14}/> Deal Count</div>
-                   <span className="text-stone-800">{data.listDeals.toLocaleString()}</span>
+                
+                <div className="flex flex-col md:flex-row justify-between items-end gap-12">
+                  <div className="flex-1">
+                    <h1 className="text-6xl md:text-8xl font-black uppercase leading-[0.85] tracking-tighter mb-6">
+                      Email Marketing<br/>Case Study
+                    </h1>
+                    <div className="w-24 h-3 bg-stone-900 rounded-full" />
+                  </div>
+                  {data.clientLogo && (
+                    <div className="bg-white/30 backdrop-blur-xl p-6 rounded-[40px] shadow-2xl border border-white/20">
+                      <img src={data.clientLogo} alt="Client Logo" className="h-20 w-auto object-contain" />
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <SummarySection summary={data.summary} recommendations={data.recommendations} />
-
-          {/* Row 3: Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-             <MetricCardSmall title="Contact Count" value={data.contactCount.toLocaleString()} label="Contact Count" icon={<Users size={20} style={{color: data.accentColor}} />} desc="Displays the total count of contacts as a single value." color={data.accentColor} />
-             <MetricCardSmall title="Deal Count" value={data.dealCount.toLocaleString()} label="Deal Count" icon={<Briefcase size={20} style={{color: data.textColor}} />} desc="Number of deals (in all accounts)" color={data.textColor} />
-             <MetricCardSmall title="Deals Value" value={`$${data.dealsValue.toLocaleString()}`} label="Value" icon={<TrendingUp size={20} style={{color: data.accentColor}} />} desc="Total value of all deals" color={data.accentColor} />
-          </div>
-
-          {/* Row 4: Comparison Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-             <GrowthChart labels={data.growthLabels} contacts={data.growthContacts} deals={data.growthDeals} accentColor={data.accentColor} textColor={data.textColor} imageOverride={data.growthChartImage} />
-             <DistributionChart contacts={data.contactCount} deals={data.dealCount} accentColor={data.accentColor} textColor={data.textColor} imageOverride={data.distributionChartImage} />
-          </div>
-
-          {/* Row 5: Deals Value List */}
-          <div className="report-card">
-             <div className="flex justify-between items-center mb-6">
-                <h3 className="font-bold text-stone-900 text-sm uppercase tracking-wide">Deals value</h3>
-                <span className="text-[10px] font-bold text-stone-400 uppercase flex items-center gap-1">Value <TrendingUp size={10}/></span>
-             </div>
-             <div className="space-y-4">
-                {data.dealSources.map(s => (
-                  <div key={s.id} className="flex justify-between border-b border-stone-50 pb-3 text-sm leading-relaxed">
-                    <span className="text-stone-600 font-medium pr-4">{s.source}</span>
-                    <span className="font-bold text-stone-800 whitespace-nowrap">{s.value.toLocaleString()}</span>
-                  </div>
-                ))}
+                
+                <div className="mt-12 pt-12 border-t border-stone-800/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <p className="text-xl font-black uppercase tracking-widest text-stone-800">
+                    Prepared for: <span className="text-stone-950 underline decoration-4 decoration-stone-900/20">{data.reportTitle}</span>
+                  </p>
+                  <p className="text-sm font-bold uppercase tracking-widest opacity-60">Confidential Report</p>
+                </div>
              </div>
           </div>
 
-          {/* Row 6: Engagement Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="report-card">
-              <h3 className="font-bold text-stone-900 mb-6 text-xs uppercase tracking-wide">Email Engagement Goals</h3>
-              <div className="space-y-4">
-                <MiniProgress label="Total Emails Sent" val={data.actualSent} max={data.emailsSentGoal} color={data.accentColor} />
-                <MiniProgress label="Total Opens" val={data.actualOpens} max={data.emailsOpenedGoal} color={data.textColor} />
-                <MiniProgress label="Total Link Clicks" val={data.actualClicks} max={data.linkClicksGoal} color={data.accentColor} />
-              </div>
-            </div>
-            <div className="report-card flex flex-col justify-between">
-              <h3 className="font-bold text-stone-900 text-xs uppercase tracking-wide mb-4">Campaign Engagement List</h3>
-              <div className="space-y-3">
-                <MetricRow icon={<Mail size={14}/>} label="Emails Sent" val={data.actualSent} />
-                <MetricRow icon={<ExternalLink size={14}/>} label="Opens" val={data.actualOpens} />
-                <MetricRow icon={<MousePointerClick size={14}/>} label="Link Clicks" val={data.actualClicks} />
-                <MetricRow icon={<MessageSquare size={14}/>} label="Replies" val={data.actualReplies} />
-              </div>
-            </div>
+          {/* Bento Grid: Summary & Recommendations */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+            <BentoCard className="md:col-span-8 flex flex-col justify-between border-l-[16px] border-[#E8B931] bg-white group hover:translate-y-[-4px]">
+               <h3 className="text-2xl font-black uppercase flex items-center gap-4 mb-8">
+                 <div className="w-10 h-10 bg-[#E8B931] rounded-2xl flex items-center justify-center text-stone-900 shadow-lg">
+                   <FileText size={20} />
+                 </div>
+                 Executive Summary
+               </h3>
+               <p className="text-stone-600 text-xl font-medium leading-[1.5] italic pr-8">
+                "{data.summary}"
+               </p>
+               <div className="mt-12 flex items-center gap-3 text-stone-400 font-black uppercase text-[10px] tracking-widest">
+                  <div className="w-8 h-1 bg-slate-100 rounded-full" />
+                  Insight Analysis
+               </div>
+            </BentoCard>
+
+            <BentoCard className="md:col-span-4 bg-amber-50/50 border-amber-200/50 flex flex-col hover:bg-amber-50 group transition-colors">
+               <h3 className="text-sm font-black uppercase text-amber-700 mb-8 flex items-center gap-3 tracking-widest">
+                 <div className="p-2 bg-stone-900 rounded-lg text-[#E8B931] group-hover:scale-110 transition-transform">
+                   <TrendingUp size={14} />
+                 </div>
+                 Strategic Shifts
+               </h3>
+               <div className="space-y-6 flex-1">
+                 {data.recommendations.map((rec, i) => (
+                   <div key={i} className="flex gap-4">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-900 text-[#E8B931] flex items-center justify-center font-black text-xs shadow-md">
+                        {i + 1}
+                      </div>
+                      <p className="text-sm font-bold text-stone-700 leading-tight pt-1 group-hover:text-stone-900">
+                        {rec}
+                      </p>
+                   </div>
+                 ))}
+               </div>
+            </BentoCard>
           </div>
 
-          {/* Row 7: Major Engagement Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-             <MetricCardSmall title="Total Emails Sent" value={data.metricsEmailsSent.toLocaleString()} label="Emails Sent" icon={<Mail size={20} style={{color: data.accentColor}} />} color={data.accentColor} />
-             <MetricCardSmall title="Opens" value={data.metricsOpens.toLocaleString()} label="Opens" icon={<ExternalLink size={20} style={{color: data.textColor}} />} color={data.textColor} />
-             <MetricCardSmall title="Open Rate" value={data.metricsOpenRate} label="Open Rate" icon={<TrendingUp color={data.metricsOpenRate.startsWith('-') ? '#ef4444' : data.textColor} size={20}/>} color={data.cardColor}/>
+          {/* Metrics Row: 3 Premium Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {[
+                { label: "Contact Count", val: data.contactCount, icon: <Users size={28}/>, accent: '#E8B931', prefix: '' },
+                { label: "Deal Velocity", val: data.dealCount, icon: <Briefcase size={28}/>, accent: '#1a1a1a', prefix: '' },
+                { label: "Estimated Value", val: data.dealsValue, icon: <TrendingUp size={28}/>, accent: '#E8B931', prefix: '$' }
+              ].map((m, i) => (
+                <BentoCard key={i} className="flex items-center gap-8 group hover:shadow-xl hover:border-[#E8B931] transition-all">
+                   <div className="w-20 h-20 rounded-[28px] flex items-center justify-center text-white shadow-2xl transition-transform group-hover:scale-110 group-hover:rotate-3" style={{ backgroundColor: m.accent }}>
+                     {m.icon}
+                   </div>
+                   <div>
+                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">{m.label}</p>
+                     <p className="text-4xl font-black text-stone-900 tracking-tighter">{m.prefix}{formatNumber(m.val)}</p>
+                   </div>
+                </BentoCard>
+              ))}
           </div>
 
-          {/* Row 8: Sent vs Opens Trend */}
-          <div className="report-card">
-             <h3 className="font-bold text-stone-900 mb-6 text-xs uppercase tracking-wide">Sent vs. Opens</h3>
-             <div className="min-h-[250px] flex items-center justify-center">
-                {data.sentOpensChartImage ? (
-                  <img src={data.sentOpensChartImage} className="max-h-[300px] w-full object-contain rounded-lg" alt="Sent vs Opens Override" />
-                ) : (
-                  <div className="h-[250px] w-full">
-                    <Line data={{
-                      labels: data.growthLabels,
-                      datasets: [
-                        { label: 'Sent', data: data.sentTrend, borderColor: '#1e1b4b', backgroundColor: 'transparent', tension: 0.1, borderWidth: 2 },
-                        { label: 'Opens', data: data.opensTrend, borderColor: '#ef4444', backgroundColor: 'transparent', tension: 0.1, borderWidth: 2 },
-                      ]
-                    }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
-                  </div>
-                )}
-             </div>
-          </div>
-
-          {/* Click Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             <MetricCardSmall title="Link clicks" value={data.linkClicksTotal.toLocaleString()} label="Link Clicks" icon={<MousePointerClick size={20}/>} />
-             <MetricCardSmall title="Link Click Rate" value={data.linkClickRateStr} label="Rate" icon={<Filter color={data.linkClickRateStr.startsWith('-') ? '#ef4444' : '#1e1b4b'} size={20}/>} />
-          </div>
-
-          {/* Funnel and Engagement Overlap */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-             <FunnelDisplay sent={data.funnelSent} opened={data.funnelOpened} clicked={data.funnelClicked} accentColor={data.accentColor} textColor={data.textColor} imageOverride={data.funnelChartImage} />
-             <div className="report-card lg:col-span-2">
-                <h3 className="font-bold text-stone-900 mb-6 text-xs uppercase tracking-wide">Sent/opened emails</h3>
-                <div className="min-h-[280px] flex items-center justify-center">
-                   {data.engagementTrendChartImage ? (
-                     <img src={data.engagementTrendChartImage} className="max-h-[300px] w-full object-contain rounded-lg" alt="Engagement Trend Override" />
-                   ) : (
-                     <div className="h-[280px] w-full">
-                        <Line data={{
-                          labels: data.growthLabels,
-                          datasets: [
-                            { label: 'Total Opens', data: data.engagementOpensTrend, borderColor: '#ef4444', backgroundColor: 'transparent', tension: 0.3 },
-                            { label: 'Total Link Clicks', data: data.engagementClicksTrend, borderColor: '#1e1b4b', backgroundColor: 'transparent', tension: 0.3 },
-                          ]
-                        }} options={{ responsive: true, maintainAspectRatio: false }} />
+          {/* Charts Section: High Fidelity Visuals */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+             <BentoCard className="md:col-span-8 group">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-4">
+                   <div>
+                     <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Sent vs. Opens</h3>
+                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time-series engagement analysis</p>
+                   </div>
+                   <div className="flex gap-6">
+                     <div className="flex items-center gap-3">
+                        <div className="w-12 h-1.5 rounded-full bg-[#E8B931] group-hover:w-16 transition-all" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Sent</span>
                      </div>
-                   )}
+                     <div className="flex items-center gap-3">
+                        <div className="w-12 h-1.5 rounded-full bg-stone-900 group-hover:w-16 transition-all" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Opens</span>
+                     </div>
+                   </div>
+                </div>
+                <div className="h-[400px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data.growthLabels.map((l, i) => ({ name: l, sent: data.growthContacts[i] || 0, opens: data.growthDeals[i] || 0 }))}>
+                      <defs>
+                        <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#E8B931" stopOpacity={0.4}/>
+                          <stop offset="95%" stopColor="#E8B931" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={10} fontWeight={900} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} fontSize={10} fontWeight={900} />
+                      <Tooltip contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} />
+                      <Area type="monotone" dataKey="sent" stroke="#E8B931" strokeWidth={5} fillOpacity={1} fill="url(#colorSent)" />
+                      <Area type="monotone" dataKey="opens" stroke="#1a1a1a" strokeWidth={5} fill="transparent" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+             </BentoCard>
+
+             <BentoCard className="md:col-span-4 flex flex-col justify-center items-center text-center relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-[#E8B931]/5 rounded-full -mr-12 -mt-12" />
+                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] mb-12 text-slate-400">Database Conversion</h3>
+                <div className="relative w-56 h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[{ name: 'Contact vs Deal', value: 38 }, { name: 'Untapped', value: 62 }]}
+                        innerRadius={75}
+                        outerRadius={100}
+                        paddingAngle={8}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        <Cell fill="#E8B931" />
+                        <Cell fill="#f1f5f9" />
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-6xl font-black text-stone-900 tracking-tighter">38%</span>
+                    <span className="text-[12px] font-black text-slate-400 uppercase tracking-widest mt-2">Deal Ratio</span>
+                  </div>
+                </div>
+                <p className="mt-12 text-[11px] font-bold text-stone-500 leading-relaxed max-w-[200px]">
+                  Highest performing bucket identified in <span className="text-stone-900 font-black underline decoration-2 decoration-[#E8B931]">new entries</span>.
+                </p>
+             </BentoCard>
+          </div>
+
+          {/* Email Clicks Funnel */}
+          <BentoCard className="bg-white group overflow-hidden">
+             <div className="grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
+                <div className="md:col-span-7 flex flex-col gap-4">
+                   <div className="bg-[#ef4444] text-white p-8 rounded-[36px] flex justify-between items-center transform -skew-x-2 shadow-xl hover:scale-[1.02] transition-transform">
+                       <div className="flex items-center gap-6">
+                         <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center font-black">01</div>
+                         <span className="text-lg font-black uppercase tracking-widest">Total Emails Sent</span>
+                       </div>
+                       <span className="text-3xl font-black">{formatNumber(data.metricsEmailsSent)}</span>
+                    </div>
+                    <div className="bg-[#1a1a1a] text-white p-8 rounded-[36px] flex justify-between items-center transform -skew-x-2 shadow-xl hover:scale-[1.02] transition-transform ml-4">
+                       <div className="flex items-center gap-6">
+                         <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center font-black">02</div>
+                         <span className="text-lg font-black uppercase tracking-widest">Opened Interactions</span>
+                       </div>
+                       <span className="text-3xl font-black">{formatNumber(data.metricsOpens)}</span>
+                    </div>
+                    <div className="bg-[#E8B931] text-stone-900 p-8 rounded-[36px] flex justify-between items-center transform -skew-x-2 shadow-xl hover:scale-[1.02] transition-transform ml-8 border-4 border-white/50">
+                       <div className="flex items-center gap-6">
+                         <div className="w-12 h-12 bg-stone-900/20 rounded-2xl flex items-center justify-center font-black">03</div>
+                         <span className="text-lg font-black uppercase tracking-widest">Engagement Clicks</span>
+                       </div>
+                       <span className="text-3xl font-black">{formatNumber(data.linkClicksTotal)}</span>
+                    </div>
+                </div>
+                <div className="md:col-span-5 text-center p-12 bg-stone-950 text-[#E8B931] rounded-[60px] border-[12px] border-slate-50 flex flex-col items-center justify-center shadow-[0_45px_70px_-20px_rgba(0,0,0,0.5)]">
+                    <p className="text-[12px] font-black uppercase tracking-[0.4em] mb-6 opacity-60">Funnel Conversion Rate</p>
+                    <p className="text-[120px] font-black italic tracking-tighter leading-none mb-4 -mx-10 select-none">38.16%</p>
+                    <div className="w-32 h-2 bg-[#E8B931] rounded-full mt-4" />
                 </div>
              </div>
+          </BentoCard>
+
+          {/* Campaigns Performance Table */}
+          <div className="pt-12">
+            <h3 className="text-3xl font-black uppercase mb-12 flex items-center gap-6">
+              <div className="w-1.5 h-12 bg-[#E8B931] rounded-full" />
+              Campaigns Performance
+            </h3>
+            <div className="overflow-x-auto pb-8">
+              <table className="w-full border-separate border-spacing-y-4">
+                <thead>
+                  <tr className="text-left text-[11px] font-black uppercase tracking-[0.3em] text-slate-400">
+                    <th className="px-10 py-6">Identity</th>
+                    <th className="px-10 py-6">Impression</th>
+                    <th className="px-10 py-6">Interaction</th>
+                    <th className="px-10 py-6">Efficiency</th>
+                    <th className="px-10 py-6 text-right">Activity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.campaignsPerformance.map((row, i) => (
+                    <tr key={i} className="bg-white rounded-[32px] group hover:scale-[1.01] transition-all cursor-default shadow-sm hover:shadow-xl">
+                      <td className="px-10 py-8 rounded-l-[32px] font-black text-stone-950 border-y-2 border-l-2 border-transparent group-hover:border-[#E8B931]/20">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center font-black text-[10px] text-slate-400">
+                            {String(i + 1).padStart(2, '0')}
+                          </div>
+                          {row.name}
+                        </div>
+                      </td>
+                      <td className="px-10 py-8 text-stone-600 font-bold border-y-2 border-transparent group-hover:border-[#E8B931]/20">
+                        {formatNumber(row.sent)}
+                      </td>
+                      <td className="px-10 py-8 text-stone-600 font-bold border-y-2 border-transparent group-hover:border-[#E8B931]/20">
+                        {formatNumber(row.opens)}
+                      </td>
+                      <td className="px-10 py-8 font-black text-[#E8B931] text-lg border-y-2 border-transparent group-hover:border-[#E8B931]/20">
+                        {row.openRate}%
+                      </td>
+                      <td className="px-10 py-8 rounded-r-[32px] text-right font-black text-stone-950 border-y-2 border-r-2 border-transparent group-hover:border-[#E8B931]/20 group-hover:text-[#E8B931]">
+                        {formatNumber(row.linkClicks)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          {/* Unsubcribes & Footer Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-             <MetricCardSmall title="Unsubscribes" value={data.unsubscribes.toLocaleString()} label="Unsubscribes" icon={<LogOut size={20}/>} />
-             <MetricCardSmall title="Unsubscribe Rate" value={data.unsubscribeRateStr} label="Rate" icon={<Users size={20}/>} />
-             <MetricCardSmall title="Replies" value={data.repliesTotal.toLocaleString()} label="Replies" icon={<MessageSquare size={20}/>} />
+          <div className="mt-20 pt-12 border-t border-slate-200 text-center flex flex-col items-center">
+             <div className="w-20 h-20 bg-stone-900 text-[#E8B931] rounded-[24px] flex items-center justify-center mb-6 shadow-2xl">
+               <Mail size={32} />
+             </div>
+             <p className="text-sm font-black uppercase tracking-[0.4em] text-slate-400 mb-2">Automated Report Generator</p>
+             <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest italic">Built for performance markers & growth engineers</p>
           </div>
-
-          <EmailPerformanceTable rows={data.campaignsPerformance} />
 
         </div>
       </main>
@@ -1103,7 +1066,15 @@ export default function App() {
   );
 }
 
-// Sidebars Helpers
+// Sidebar Helpers
+function BentoCard({ children, className, ...props }: { children: React.ReactNode, className?: string } & React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div {...props} className={cn("bg-white border-2 border-slate-100 rounded-[40px] shadow-sm p-8 transition-all duration-300", className)}>
+      {children}
+    </div>
+  );
+}
+
 function Section({ label, icon, children }: any) {
   return (
     <div className="mb-6">
@@ -1130,7 +1101,7 @@ function MiniProgress({ label, val, max, color }: any) {
     <div>
       <div className="flex justify-between text-[10px] font-bold mb-1">
         <span className="text-stone-500 uppercase tracking-tight">{label}</span>
-        <span className="text-stone-800">{val.toLocaleString()} / {max.toLocaleString()}</span>
+        <span className="text-stone-800">{formatNumber(val)} / {formatNumber(max)}</span>
       </div>
       <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(245, 245, 244, 0.5)' }}>
         <div className={`h-full`} style={{ width: `${(val / max) * 100}%`, backgroundColor: color }} />
@@ -1143,7 +1114,7 @@ function MetricRow({ icon, label, val }: any) {
   return (
     <div className="flex items-center justify-between text-xs font-bold border-b border-stone-50 pb-2">
        <div className="flex items-center gap-2 text-stone-500">{icon} {label}</div>
-       <span className="text-stone-800">{val.toLocaleString()}</span>
+       <span className="text-stone-800">{formatNumber(val)}</span>
     </div>
   );
 }
