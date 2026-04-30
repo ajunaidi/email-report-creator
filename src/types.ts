@@ -38,8 +38,8 @@ export interface HeroStat {
 
 export interface FloatingElement {
   id: string;
-  type: 'image' | 'shape';
-  content: string; // URL or shape ID
+  type: 'image' | 'shape' | 'icon';
+  content: string; // URL, shape ID, or Lucide icon name
   top: number;
   left: number;
   width: number;
@@ -47,6 +47,7 @@ export interface FloatingElement {
   rotation?: number;
   zIndex: number;
   opacity?: number;
+  color?: string;
 }
 
 export interface ReportData {

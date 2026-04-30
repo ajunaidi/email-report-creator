@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getUserReports, ReportDocument, deleteReport } from '../services/reportService';
+import { seedInitialData } from '../services/seedService';
 import { 
   Plus, FileText, Calendar, ChevronRight, Loader2, Trash2, 
   LayoutDashboard, Search, LogOut, Clock, ExternalLink, Download 
@@ -26,7 +27,14 @@ export function Dashboard({ onNewReport, onSelectReport }: DashboardProps) {
   const loadReports = async () => {
     setLoading(true);
     try {
-      const data = await getUserReports();
+      let data = await getUserReports();
+      
+      // Seed data if first user login and no reports exist
+      if (data.length === 0) {
+        await seedInitialData();
+        data = await getUserReports();
+      }
+
       const sortedData = data.sort((a, b) => {
         const timeA = a.updatedAt?.toMillis() || a.createdAt?.toMillis() || 0;
         const timeB = b.updatedAt?.toMillis() || b.createdAt?.toMillis() || 0;

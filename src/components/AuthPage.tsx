@@ -31,7 +31,13 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
       await signInWithPopup(auth, provider);
       onSuccess();
     } catch (err: any) {
-      setError(err.message);
+      if (err.code === 'auth/unauthorized-domain') {
+        setError(`Domain Unauthorized: Please add "${window.location.hostname}" to your Firebase Console (Auth > Settings > Authorized Domains).`);
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError("Sign-in method disabled: Please enable 'Google' in your Firebase Console (Authentication > Sign-in method).");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -54,7 +60,11 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
         onSuccess();
       }
     } catch (err: any) {
-      setError(err.message);
+      if (err.code === 'auth/operation-not-allowed') {
+        setError("Email/Password disabled: Please enable 'Email/Password' in your Firebase Console (Authentication > Sign-in method).");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }

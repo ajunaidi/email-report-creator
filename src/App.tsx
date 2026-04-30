@@ -7,7 +7,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   BarChart3, Users, Mail, TrendingUp, MousePointerClick, 
   LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image, Type, Maximize2, FileText,
-  Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash, PieChart as PieChartIcon, ChevronUp, ChevronDown, LayoutDashboard, Chrome
+  Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash, PieChart as PieChartIcon, ChevronUp, ChevronDown, LayoutDashboard, Chrome,
+  Sprout, Leaf, Star, Heart, Triangle
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -314,6 +315,17 @@ function FloatingElementComponent({ element, onChange, onRemove, isViewer }: { e
     >
       {element.type === 'image' ? (
         <img src={element.content} className="w-full h-full object-cover rounded-lg shadow-xl" alt="" draggable={false} />
+      ) : element.type === 'icon' ? (
+        <div className="w-full h-full flex items-center justify-center" style={{ color: element.color || '#E8B931' }}>
+          {React.createElement(
+            element.content === 'sprout' ? Sprout :
+            element.content === 'leaf' ? Leaf :
+            element.content === 'star' ? Star :
+            element.content === 'heart' ? Heart :
+            element.content === 'triangle' ? Triangle : Heart,
+            { size: element.width }
+          )}
+        </div>
       ) : (
         <div className="w-full h-full bg-stone-900/10 border-2 border-stone-900/20 rounded-xl flex items-center justify-center p-4">
            { element.content === 'circle' && <div className="w-full h-full rounded-full bg-current opacity-20" /> }
@@ -1731,8 +1743,30 @@ export default function App() {
         </Section>
 
         <Section label="Graphic Elements" icon={<Palette size={14} />}>
-          <p className="text-[10px] text-stone-500 mb-4 px-1 uppercase font-black tracking-tighter italic">Floating icons, shapes or stickers</p>
+          <p className="text-[10px] text-stone-500 mb-4 px-1 uppercase font-black tracking-tighter italic">Floating sticks, shapes, grass or icons</p>
           <div className="space-y-4">
+             {/* Icons / "Grass" */}
+             <div className="grid grid-cols-4 gap-2 mb-4">
+               {[
+                 { id: 'sprout', icon: Sprout, label: 'Grass' },
+                 { id: 'leaf', icon: Leaf, label: 'Leaf' },
+                 { id: 'star', icon: Star, label: 'Star' },
+                 { id: 'heart', icon: Heart, label: 'Heart' },
+               ].map(item => (
+                 <button 
+                   key={item.id}
+                   onClick={() => {
+                     const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'icon', content: item.id, top: 200, left: 200, width: 40, height: 40, zIndex: 10, color: '#22c55e' };
+                     setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
+                   }}
+                   className="flex flex-col items-center justify-center p-2 bg-stone-800 rounded-lg border border-stone-700 hover:border-mustard transition-all group"
+                 >
+                   <item.icon size={16} className="text-stone-400 group-hover:text-mustard" />
+                   <span className="text-[8px] font-black uppercase mt-1 text-stone-600">{item.label}</span>
+                 </button>
+               ))}
+             </div>
+
             <div className="grid grid-cols-2 gap-2">
               <button 
                 onClick={() => {
@@ -1751,6 +1785,15 @@ export default function App() {
                 className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
               >
                 + Square
+              </button>
+              <button 
+                onClick={() => {
+                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'icon', content: 'triangle', top: 140, left: 140, width: 80, height: 80, zIndex: 1, opacity: 0.5, color: '#E8B931' };
+                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
+                }}
+                className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
+              >
+                + Triangle
               </button>
             </div>
             
