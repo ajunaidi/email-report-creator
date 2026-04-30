@@ -62,6 +62,14 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
     } catch (err: any) {
       if (err.code === 'auth/operation-not-allowed') {
         setError("Email/Password disabled: Please enable 'Email/Password' in your Firebase Console (Authentication > Sign-in method).");
+      } else if (err.code === 'auth/email-already-in-use') {
+        setError("This email is already registered. Try signing in instead.");
+      } else if (err.code === 'auth/weak-password') {
+        setError("Password should be at least 6 characters long.");
+      } else if (err.code === 'auth/invalid-email') {
+        setError("Please enter a valid email address.");
+      } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError("Invalid email or password. Please try again.");
       } else {
         setError(err.message);
       }
@@ -158,6 +166,19 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
             {loading ? <Loader2 className="animate-spin" size={20} /> : (showForgot ? 'Reset Password' : isLogin ? 'Sign In' : 'Create Account')}
             {!loading && <ArrowRight size={20} />}
           </button>
+
+          {isLogin && !showForgot && (
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('test@example.com');
+                setPassword('password123');
+              }}
+              className="w-full py-2 text-[9px] font-black text-stone-400 uppercase tracking-widest hover:text-stone-600 transition-colors border border-dashed border-stone-200 rounded-lg"
+            >
+              Fill Test Credentials (test@example.com)
+            </button>
+          )}
         </form>
 
         <div className="mt-10 pt-8 border-t border-stone-100 text-center">
