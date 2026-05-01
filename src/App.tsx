@@ -6,7 +6,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   BarChart3, Users, Mail, TrendingUp, MousePointerClick, 
-  LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image, Type, Maximize2, FileText,
+  LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image, Type, Maximize2, FileText, Info,
   Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash, PieChart as PieChartIcon, ChevronUp, ChevronDown, LayoutDashboard, Chrome,
   Sprout, Leaf, Star, Heart, Triangle
 } from 'lucide-react';
@@ -236,11 +236,16 @@ function SectionControls({ onDuplicate, onRemove, onMoveUp, onMoveDown, isFirst,
   );
 }
 
-function SectionWrapper({ children, onDuplicate, onRemove, onMoveUp, onMoveDown, isFirst, isLast, isViewer, id, bgImage }: { children: React.ReactNode, onDuplicate: () => void, onRemove: () => void, onMoveUp: () => void, onMoveDown: () => void, isFirst: boolean, isLast: boolean, isViewer?: boolean, id?: string, bgImage?: string }) {
+function SectionWrapper({ children, onDuplicate, onRemove, onMoveUp, onMoveDown, isFirst, isLast, isViewer, id, bgImage, isActive, onClick }: { children: React.ReactNode, onDuplicate: () => void, onRemove: () => void, onMoveUp: () => void, onMoveDown: () => void, isFirst: boolean, isLast: boolean, isViewer?: boolean, id?: string, bgImage?: string, isActive?: boolean, onClick?: () => void }) {
   return (
     <div 
       id={id} 
-      className="relative group/section print:break-after-page mb-16 print:mb-0 min-h-[500px]"
+      onClick={onClick}
+      className={cn(
+        "relative group/section print:break-after-page mb-16 print:mb-0 min-h-[500px] transition-all",
+        !isViewer && "cursor-pointer rounded-2xl",
+        !isViewer && isActive && "ring-4 ring-mustard/30 ring-offset-8 ring-offset-transparent shadow-2xl"
+      )}
     >
       {bgImage && (
         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden rounded-[inherit]">
@@ -263,30 +268,54 @@ function SectionWrapper({ children, onDuplicate, onRemove, onMoveUp, onMoveDown,
   );
 }
 
-function FloatingElementComponent({ element, onChange, onRemove, isViewer }: { element: FloatingElement, onChange: (el: FloatingElement) => void, onRemove: () => void, isViewer?: boolean }) {
+function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSelected, isViewer }: { element: FloatingElement, onChange: (el: FloatingElement) => void, onRemove: () => void, onSelect: () => void, isSelected: boolean, isViewer?: boolean }) {
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+  const [startSize, setStartSize] = useState({ w: 0, h: 0 });
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (isViewer) return;
+    onSelect();
     setIsDragging(true);
-    setStartPos({ x: e.clientX - element.left, y: e.clientY - element.top });
+    setStartPos({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsResizing(true);
+    setStartPos({ x: e.clientX, y: e.clientY });
+    setStartSize({ w: element.width, h: element.height });
   };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isDragging) {
+        const dx = e.clientX - startPos.x;
+        const dy = e.clientY - startPos.y;
         onChange({
           ...element,
-          left: e.clientX - startPos.x,
-          top: e.clientY - startPos.y
+          left: element.left + dx,
+          top: element.top + dy
+        });
+        setStartPos({ x: e.clientX, y: e.clientY });
+      } else if (isResizing) {
+        const dx = e.clientX - startPos.x;
+        const dy = e.clientY - startPos.y;
+        onChange({
+          ...element,
+          width: Math.max(20, startSize.w + dx),
+          height: Math.max(20, startSize.h + dy)
         });
       }
     };
 
-    const handleMouseUp = () => setIsDragging(false);
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      setIsResizing(false);
+    };
 
-    if (isDragging) {
+    if (isDragging || isResizing) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     }
@@ -294,13 +323,14 @@ function FloatingElementComponent({ element, onChange, onRemove, isViewer }: { e
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, startPos, element, onChange]);
+  }, [isDragging, isResizing, startPos, startSize, element, onChange]);
 
   return (
     <div 
       className={cn(
         "absolute cursor-move select-none group/floating",
-        isDragging && "z-50 ring-2 ring-[#E8B931] ring-offset-2"
+        (isDragging || isSelected) && "z-50 ring-2 ring-[#E8B931] ring-offset-2",
+        isSelected && "z-50"
       )}
       style={{
         top: `${element.top}px`,
@@ -316,32 +346,54 @@ function FloatingElementComponent({ element, onChange, onRemove, isViewer }: { e
       {element.type === 'image' ? (
         <img src={element.content} className="w-full h-full object-cover rounded-lg shadow-xl" alt="" draggable={false} />
       ) : element.type === 'icon' ? (
-        <div className="w-full h-full flex items-center justify-center" style={{ color: element.color || '#E8B931' }}>
+        <div className="w-full h-full flex items-center justify-center pointer-events-none" style={{ color: element.color || '#E8B931' }}>
           {React.createElement(
             element.content === 'sprout' ? Sprout :
             element.content === 'leaf' ? Leaf :
             element.content === 'star' ? Star :
             element.content === 'heart' ? Heart :
             element.content === 'triangle' ? Triangle : Heart,
-            { size: element.width }
+            { size: Math.min(element.width, element.height) }
           )}
         </div>
+      ) : element.type === 'text' ? (
+        <div 
+          className="w-full h-full flex items-center justify-center text-center p-2 leading-tight"
+          style={{ 
+            color: element.color || '#000000', 
+            fontSize: `${element.fontSize || 16}px`,
+            fontWeight: element.fontWeight || 'bold'
+          }}
+        >
+          {element.content}
+        </div>
       ) : (
-        <div className="w-full h-full bg-stone-900/10 border-2 border-stone-900/20 rounded-xl flex items-center justify-center p-4">
-           { element.content === 'circle' && <div className="w-full h-full rounded-full bg-current opacity-20" /> }
-           { element.content === 'square' && <div className="w-full h-full rounded-lg bg-current opacity-20" /> }
+        <div className="w-full h-full bg-stone-950/20 border-2 border-stone-900/20 rounded-xl flex items-center justify-center p-4">
+           { element.content === 'circle' && <div className="w-full h-full rounded-full border-4 border-current opacity-40" /> }
+           { element.content === 'square' && <div className="w-full h-full rounded-lg border-4 border-current opacity-40" /> }
         </div>
       )}
       
-      {!isViewer && (
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex gap-1 opacity-0 group-hover/floating:opacity-100 transition-opacity whitespace-nowrap bg-stone-900 text-white p-1 rounded-lg text-[9px] font-black uppercase">
-          <button 
-            onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            className="px-2 hover:text-red-500 transition-colors"
+      {!isViewer && isSelected && (
+        <>
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex gap-2 whitespace-nowrap bg-stone-900 text-white px-3 py-1.5 rounded-full text-[10px] font-black uppercase shadow-2xl border border-stone-800">
+            <span className="text-[#E8B931]">Selected</span>
+            <div className="w-px h-3 bg-stone-700" />
+            <button 
+              onClick={(e) => { e.stopPropagation(); onRemove(); }}
+              className="hover:text-red-500 transition-colors"
+            >
+              Remove
+            </button>
+          </div>
+          {/* Resize Handle */}
+          <div 
+            className="absolute -bottom-2 -right-2 w-5 h-5 bg-[#E8B931] border-2 border-stone-950 rounded-full cursor-nwse-resize shadow-lg z-50 flex items-center justify-center"
+            onMouseDown={handleResizeStart}
           >
-            Remove
-          </button>
-        </div>
+            <div className="w-1.5 h-1.5 bg-stone-950 rotate-45" />
+          </div>
+        </>
       )}
     </div>
   );
@@ -357,7 +409,10 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [isViewerMode, setIsViewerMode] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [view, setView] = useState<'auth' | 'dashboard' | 'editor'>('auth');
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
@@ -367,12 +422,13 @@ export default function App() {
       setIsAuthLoading(false);
       if (u) {
         if (view === 'auth') setView('dashboard');
-      } else {
+        setIsOfflineMode(false);
+      } else if (!isOfflineMode) {
         setView('auth');
       }
     });
     return () => unsubscribe();
-  }, [view, isViewerMode]);
+  }, [view, isViewerMode, isOfflineMode]);
 
   // Handle URL params for direct sharing
   useEffect(() => {
@@ -430,6 +486,15 @@ export default function App() {
     setData({ ...data, sections: newSections });
   };
 
+  useEffect(() => {
+    if (activeSectionId && reportRef.current) {
+      const element = reportRef.current.querySelector(`#${activeSectionId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [activeSectionId]);
+
   const removeSection = (id: string) => {
     setData({ ...data, sections: data.sections?.filter(s => s.id !== id) });
   };
@@ -455,7 +520,15 @@ export default function App() {
       isLast: index === sectionsCount - 1,
       isViewer: isViewerMode,
       id: section.id,
-      bgImage: section.bgImage
+      bgImage: section.bgImage,
+      isActive: activeSectionId === section.id,
+      onClick: () => {
+        if (!isViewerMode) {
+          setActiveSectionId(section.id);
+          setIsSidebarOpen(true);
+        }
+      },
+      reportRef: reportRef
     };
 
     switch (section.type) {
@@ -463,29 +536,6 @@ export default function App() {
         return (
           <SectionWrapper key={section.id} id={section.id} {...commonProps}>
             <div className="min-h-[800px] flex flex-col justify-center relative py-12">
-               {/* Floating Elements Layer */}
-               <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-                  <div className="relative w-full h-full pointer-events-auto">
-                    {(data.floatingElements || []).map((el, idx) => (
-                      <FloatingElementComponent 
-                        key={el.id} 
-                        element={el} 
-                        isViewer={isViewerMode}
-                        onChange={(updated) => {
-                          const copy = [...(data.floatingElements || [])];
-                          copy[idx] = updated;
-                          setData({...data, floatingElements: copy});
-                        }}
-                        onRemove={() => {
-                          const copy = [...(data.floatingElements || [])];
-                          copy.splice(idx, 1);
-                          setData({...data, floatingElements: copy});
-                        }}
-                      />
-                    ))}
-                  </div>
-               </div>
-
                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center relative z-10 pointer-events-none">
                   <div className="pointer-events-auto">
                      <h1 className="text-[60px] sm:text-[100px] md:text-[120px] font-black leading-[0.85] tracking-tighter text-stone-950 mb-4 whitespace-pre-wrap">
@@ -1264,6 +1314,10 @@ export default function App() {
   }, [data, user, reportId, debouncedSave]);
 
   const handleSaveReport = async () => {
+    if (isOfflineMode) {
+      alert("You are in Offline Mode. Log in with a valid Firebase configuration to save to the cloud.");
+      return;
+    }
     if (!user) {
       await handleSignIn();
       return;
@@ -1282,6 +1336,10 @@ export default function App() {
   };
 
   const handleGenerateShareLink = async () => {
+    if (isOfflineMode) {
+      alert("Sharing is disabled in Offline Mode. Log in with a valid Firebase configuration to share reports.");
+      return;
+    }
     if (!user) {
       await handleSignIn();
       return;
@@ -1479,7 +1537,15 @@ export default function App() {
   }
 
   if (view === 'auth' && !isViewerMode) {
-    return <AuthPage onSuccess={() => setView('dashboard')} />;
+    return (
+      <AuthPage 
+        onSuccess={() => setView('dashboard')} 
+        onContinueOffline={() => {
+          setIsOfflineMode(true);
+          setView('dashboard');
+        }}
+      />
+    );
   }
 
   if (view === 'dashboard' && !isViewerMode) {
@@ -1488,6 +1554,20 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden relative" style={{ backgroundColor: data.themeColor }}>
+      {/* Sidebar Toggle for Desktop (Floating) */}
+      {!isViewerMode && (
+        <button 
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className={cn(
+            "fixed bottom-8 left-8 z-[100] w-12 h-12 bg-stone-900 border border-stone-800 rounded-full flex items-center justify-center text-mustard shadow-2xl transition-all hover:scale-110 md:flex hidden",
+            !isSidebarOpen && "left-8"
+          )}
+          title={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+        >
+          {isSidebarOpen ? <X size={20} /> : <Settings2 size={20} />}
+        </button>
+      )}
+
       {/* Top bar for mobile/desktop layout control */}
       {!isViewerMode && (
         <header className="fixed top-0 left-0 right-0 h-14 border-b border-stone-800 bg-stone-950/80 backdrop-blur-xl flex items-center justify-between px-4 z-50 md:hidden">
@@ -1508,28 +1588,61 @@ export default function App() {
       <aside 
         id="sidebar-editor" 
         className={cn(
-          "w-full md:w-[400px] bg-stone-900 text-white overflow-y-auto border-r border-stone-800 p-6 space-y-6 scrollbar-thin transition-all duration-300 fixed md:relative z-40 h-full pt-20 md:pt-6 shadow-2xl",
-          (!isSidebarOpen && !isViewerMode) ? "-translate-x-full md:hidden" : 
-          (isViewerMode ? "-translate-x-full lg:hidden" : "translate-x-0")
+          "bg-stone-900 text-white overflow-y-auto border-r border-stone-800 space-y-6 scrollbar-thin transition-all duration-500 ease-in-out fixed md:relative z-40 h-full pt-20 md:pt-6 shadow-2xl",
+          isSidebarOpen ? "w-full md:w-[400px] translate-x-0 p-6" : "w-0 -translate-x-full md:translate-x-0 md:w-0 p-0 overflow-hidden",
+          isViewerMode && "hidden"
         )}
       >
-        <div className="flex items-center gap-3 p-4 rounded-xl border border-stone-700" style={{ backgroundColor: 'rgba(41, 37, 36, 0.5)' }}>
-          <button 
-            onClick={() => setView('dashboard')}
-            className="w-10 h-10 bg-mustard rounded-xl flex items-center justify-center text-stone-900 border-2" 
-            style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}
-            title="Back to Dashboard"
-          >
-            <LayoutDashboard size={20} />
-          </button>
-          <div>
-            <h1 className="font-bold text-lg leading-tight uppercase tracking-tighter">Ajunaidi</h1>
-            <p className="text-[10px] text-stone-400 uppercase tracking-widest font-black">Email Report Builder</p>
+        <div className={cn("transition-opacity duration-300", !isSidebarOpen && "opacity-0")}>
+          <div className="flex items-center gap-3 p-4 rounded-xl border border-stone-700" style={{ backgroundColor: 'rgba(41, 37, 36, 0.5)' }}>
+            <button 
+              onClick={() => setView('dashboard')}
+              className="w-10 h-10 bg-mustard rounded-xl flex items-center justify-center text-stone-900 border-2" 
+              style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}
+              title="Back to Dashboard"
+            >
+              <LayoutDashboard size={20} />
+            </button>
+            <div className="flex-1">
+              <h1 className="font-bold text-lg leading-tight uppercase tracking-tighter">Ajunaidi</h1>
+              <p className="text-[10px] text-stone-400 uppercase tracking-widest font-black">Email Report Builder</p>
+            </div>
+            <button onClick={() => setIsSidebarOpen(false)} className="md:block hidden text-stone-500 hover:text-white">
+              <X size={16} />
+            </button>
           </div>
         </div>
+        <div className={cn("space-y-6 transition-all duration-300", !isSidebarOpen && "opacity-0 invisible")}>
 
-        <Section label="Cloud Storage" icon={<ExternalLink size={14} />}>
+        {isOfflineMode && (
+          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest flex items-center gap-2">
+                <Info size={12} /> Offline Mode Active
+              </span>
+              <button onClick={() => setView('auth')} className="text-amber-500/60 hover:text-amber-500 text-[9px] font-black uppercase underline">Sign In</button>
+            </div>
+            <p className="text-[9px] text-stone-400 leading-relaxed italic">
+              Changes will only be stored in your browser session. Cloud saving is currently disabled due to configuration issues.
+            </p>
+          </div>
+        )}
+
+        <Section 
+          label="Cloud Storage" 
+          icon={<ExternalLink size={14} />}
+          isActive={activeSectionId === 'cloud'}
+          onHeaderClick={() => setActiveSectionId('cloud')}
+        >
            <div className="space-y-3">
+             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg space-y-2">
+                <p className="text-[10px] font-bold text-red-400 flex items-center gap-2">
+                   <Settings2 size={12} /> Firebase Domain Fix
+                </p>
+                <p className="text-[9px] text-stone-400 leading-relaxed">
+                   If you see "Unauthorized Domain", add <code className="bg-stone-800 px-1 rounded text-white">email-report-creator.vercel.app</code> to your Firebase Console (Auth &gt; Settings &gt; Authorized Domains).
+                </p>
+             </div>
              <button 
                onClick={async () => {
                  await handleSaveReport();
@@ -1605,7 +1718,12 @@ export default function App() {
           )}
         </div>
 
-        <Section label="Brand Identity" icon={<Palette size={14} />}>
+        <Section 
+          label="Brand Identity" 
+          icon={<Palette size={14} />}
+          isActive={activeSectionId === 'brand'}
+          onHeaderClick={() => setActiveSectionId('brand')}
+        >
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1643,7 +1761,12 @@ export default function App() {
           </div>
         </Section>
 
-        <Section label="Text Colors" icon={<Type size={14} />}>
+        <Section 
+          label="Text Colors" 
+          icon={<Type size={14} />}
+          isActive={activeSectionId === 'text-colors'}
+          onHeaderClick={() => setActiveSectionId('text-colors')}
+        >
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1676,7 +1799,12 @@ export default function App() {
           </div>
         </Section>
 
-        <Section label="Layout & Corner" icon={<Maximize2 size={14} />}>
+        <Section 
+          label="Layout & Corner" 
+          icon={<Maximize2 size={14} />}
+          isActive={activeSectionId === 'layout'}
+          onHeaderClick={() => setActiveSectionId('layout')}
+        >
           <div className="space-y-4">
             <div>
               <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">Typography Style</label>
@@ -1710,7 +1838,12 @@ export default function App() {
           </div>
         </Section>
 
-        <Section label="Brand Assets" icon={<Image size={14} />}>
+        <Section 
+          label="Brand Assets" 
+          icon={<Image size={14} />}
+          isActive={activeSectionId === 'assets'}
+          onHeaderClick={() => setActiveSectionId('assets')}
+        >
               <label className="flex items-center gap-2 cursor-pointer bg-stone-800 border border-stone-700 rounded-lg p-3 hover:bg-stone-700 transition-all">
                 <Image size={14} className="text-mustard" />
                 <span className="text-xs text-stone-300 font-bold">{data.clientLogo ? 'Update Logo' : 'Upload Logo'}</span>
@@ -1731,7 +1864,12 @@ export default function App() {
               )}
         </Section>
 
-        <Section label="Chart Image Replacements" icon={<Image size={14} />}>
+        <Section 
+          label="Chart Image Replacements" 
+          icon={<Image size={14} />}
+          isActive={activeSectionId === 'charts'}
+          onHeaderClick={() => setActiveSectionId('charts')}
+        >
            <p className="text-[9px] text-stone-500 mb-3 uppercase font-black px-1 tracking-tighter">Replace dynamic charts with static images</p>
            <div className="space-y-4">
              <ImageUploader label="Growth Chart" value={data.growthChartImage} onUpload={(url) => setData({...data, growthChartImage: url})} onClear={() => setData({...data, growthChartImage: ""})} />
@@ -1742,9 +1880,121 @@ export default function App() {
            </div>
         </Section>
 
-        <Section label="Graphic Elements" icon={<Palette size={14} />}>
+        <Section 
+          label="Graphic Elements" 
+          icon={<Palette size={14} />}
+          isActive={activeSectionId === 'graphics' || !!selectedElementId}
+          onHeaderClick={() => setActiveSectionId('graphics')}
+        >
           <p className="text-[10px] text-stone-500 mb-4 px-1 uppercase font-black tracking-tighter italic">Floating sticks, shapes, grass or icons</p>
           <div className="space-y-4">
+             {/* Inspector for selected element */}
+             {selectedElementId && (
+               <div className="p-4 bg-stone-950 border border-[#E8B931]/30 rounded-xl space-y-4 shadow-inner ring-1 ring-[#E8B931]/10">
+                 <div className="flex items-center justify-between">
+                   <h3 className="text-[10px] font-black uppercase tracking-widest text-[#E8B931]">Design Inspector</h3>
+                   <button onClick={() => setSelectedElementId(null)} className="text-stone-500 hover:text-white"><X size={12}/></button>
+                 </div>
+                 
+                 {(() => {
+                   const idx = data.floatingElements?.findIndex(e => e.id === selectedElementId);
+                   if (idx === undefined || idx === -1) return null;
+                   const el = data.floatingElements![idx];
+                   
+                   const updateEl = (patch: Partial<FloatingElement>) => {
+                     const copy = [...(data.floatingElements || [])];
+                     copy[idx] = { ...el, ...patch };
+                     setData({ ...data, floatingElements: copy });
+                   };
+
+                   return (
+                     <div className="space-y-3">
+                       <div className="grid grid-cols-2 gap-4">
+                         <div className="space-y-1">
+                           <label className="text-[9px] uppercase font-bold text-stone-500">Opacity</label>
+                           <input 
+                             type="range" min="0" max="1" step="0.1" 
+                             value={el.opacity ?? 1} 
+                             onChange={(e) => updateEl({ opacity: parseFloat(e.target.value) })}
+                             className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
+                           />
+                         </div>
+                         <div className="space-y-1">
+                           <label className="text-[9px] uppercase font-bold text-stone-500">Rotation</label>
+                           <input 
+                             type="range" min="0" max="360" step="5" 
+                             value={el.rotation || 0} 
+                             onChange={(e) => updateEl({ rotation: parseInt(e.target.value) })}
+                             className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
+                           />
+                         </div>
+                       </div>
+
+                       <div className="space-y-1">
+                         <label className="text-[9px] uppercase font-bold text-stone-500">Z-Index ({el.zIndex})</label>
+                         <div className="flex gap-2">
+                            <button onClick={() => updateEl({ zIndex: Math.max(0, el.zIndex - 1) })} className="flex-1 py-1 bg-stone-800 rounded text-[9px] font-black uppercase">- Back</button>
+                            <button onClick={() => updateEl({ zIndex: el.zIndex + 1 })} className="flex-1 py-1 bg-stone-800 rounded text-[9px] font-black uppercase">+ Front</button>
+                         </div>
+                       </div>
+
+                       {el.type === 'text' && (
+                         <div className="space-y-3">
+                            <div className="space-y-1">
+                              <label className="text-[9px] uppercase font-bold text-stone-500">Text Content</label>
+                              <textarea 
+                                value={el.content} 
+                                onChange={(e) => updateEl({ content: e.target.value })}
+                                className="w-full bg-stone-800 border border-stone-700 rounded p-2 text-[10px] text-white outline-none h-16"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <label className="text-[9px] uppercase font-bold text-stone-500">Font Size ({el.fontSize || 16}px)</label>
+                                <input 
+                                  type="range" min="8" max="150" step="1" 
+                                  value={el.fontSize || 16} 
+                                  onChange={(e) => updateEl({ fontSize: parseInt(e.target.value) })}
+                                  className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[9px] uppercase font-bold text-stone-500">Weight</label>
+                                <select 
+                                  value={el.fontWeight || 'bold'} 
+                                  onChange={(e) => updateEl({ fontWeight: e.target.value })}
+                                  className="w-full bg-stone-800 border border-stone-700 rounded h-6 text-[9px] text-white outline-none"
+                                >
+                                  <option value="normal">Normal</option>
+                                  <option value="bold">Bold</option>
+                                  <option value="black">Black</option>
+                                </select>
+                              </div>
+                            </div>
+                         </div>
+                       )}
+
+                       {el.type !== 'image' && (
+                         <div className="space-y-1">
+                           <label className="text-[9px] uppercase font-bold text-stone-500">Element Color</label>
+                           <div className="flex flex-wrap gap-1">
+                             {['#E8B931', '#22c55e', '#ef4444', '#3b82f6', '#f59e0b', '#ec4899', '#ffffff', '#000000'].map(c => (
+                               <button 
+                                 key={c}
+                                 onClick={() => updateEl({ color: c })}
+                                 className={cn("w-5 h-5 rounded-full border border-white/20", el.color === c && "ring-2 ring-mustard")}
+                                 style={{ backgroundColor: c }}
+                               />
+                             ))}
+                           </div>
+                         </div>
+                       )}
+                     </div>
+                   );
+                 })()}
+               </div>
+             )}
+
              {/* Icons / "Grass" */}
              <div className="grid grid-cols-4 gap-2 mb-4">
                {[
@@ -1794,6 +2044,15 @@ export default function App() {
                 className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
               >
                 + Triangle
+              </button>
+              <button 
+                onClick={() => {
+                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'text', content: 'NEW TEXT', top: 150, left: 150, width: 200, height: 60, zIndex: 10, opacity: 1, color: '#000000', fontSize: 40, fontWeight: 'black' };
+                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
+                }}
+                className="py-2 bg-mustard border border-stone-700 rounded-lg text-stone-900 text-[9px] font-black uppercase tracking-widest hover:bg-white transition-all"
+              >
+                + Text Layer
               </button>
             </div>
             
@@ -1846,7 +2105,12 @@ export default function App() {
           </div>
         </Section>
 
-        <Section label="Section Management" icon={<Maximize2 size={14} />}>
+        <Section 
+          label="Section Management" 
+          icon={<Maximize2 size={14} />}
+          isActive={(data.sections || []).some(s => s.id === activeSectionId)}
+          onHeaderClick={() => setActiveSectionId('mgmt')}
+        >
           <p className="text-[10px] text-stone-500 mb-4 px-1 uppercase font-black tracking-tighter">Adjust background images for each page</p>
           <div className="space-y-4">
             {(data.sections || []).map((section, idx) => (
@@ -1873,7 +2137,12 @@ export default function App() {
           </div>
         </Section>
 
-        <Section label="Hero Section Stats" icon={<Telescope size={14} />}>
+        <Section 
+          label="Hero Section Stats" 
+          icon={<Telescope size={14} />}
+          isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'cover'}
+          onHeaderClick={() => setActiveSectionId('hero')}
+        >
           <div className="space-y-4">
             {(data.heroStats || []).map((stat, idx) => (
               <div key={stat.id} className="p-3 bg-stone-800 rounded-lg border border-stone-700 space-y-2 relative group-item">
@@ -1935,12 +2204,22 @@ export default function App() {
           </div>
         </Section>
 
-        <Section label="1. Project Basics" icon={<Settings2 size={14} />}>
+        <Section 
+          label="1. Project Basics" 
+          icon={<Settings2 size={14} />}
+          isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'cover'}
+          onHeaderClick={() => setActiveSectionId('basics')}
+        >
           <Input label="Report Title" value={data.reportTitle} onChange={(v: string) => setData({...data, reportTitle: v})} />
           <Input label="Date Period" value={data.datePeriod} onChange={(v: string) => setData({...data, datePeriod: v})} />
         </Section>
 
-        <Section label="2 & 3. Goals & Lists" icon={<Filter size={14} />}>
+        <Section 
+          label="2 & 3. Goals & Lists" 
+          icon={<Filter size={14} />}
+          isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'goals'}
+          onHeaderClick={() => setActiveSectionId('goals')}
+        >
            <p className="text-[9px] text-stone-500 mb-2 uppercase font-black px-1 tracking-tighter">Deals and Contacts Goals</p>
            <div className="grid grid-cols-2 gap-2 mb-4">
               <Input label="Contacts Goal" type="number" value={data.conversionGoal} onChange={(v: string) => setData({...data, conversionGoal: Number(v)})} />
@@ -1955,7 +2234,12 @@ export default function App() {
            </div>
         </Section>
 
-        <Section label="4 & 5. Analysis" icon={<MessageSquare size={14} />}>
+        <Section 
+          label="4 & 5. Analysis" 
+          icon={<MessageSquare size={14} />}
+          isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'goals'}
+          onHeaderClick={() => setActiveSectionId('analysis')}
+        >
           <div className="space-y-4">
             <div>
               <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1 tracking-wider">Executive Summary</label>
@@ -1977,7 +2261,12 @@ export default function App() {
           </div>
         </Section>
 
-        <Section label="6, 7 & 8. Top Metrics" icon={<TrendingUp size={14} />}>
+        <Section 
+          label="6, 7 & 8. Top Metrics" 
+          icon={<TrendingUp size={14} />}
+          isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'growth'}
+          onHeaderClick={() => setActiveSectionId('metrics')}
+        >
           <div className="grid grid-cols-2 gap-2 mb-2">
             <Input label="Contact Count" type="number" value={data.contactCount} onChange={(v: string) => setData({...data, contactCount: Number(v)})} />
             <Input label="Deal Count" type="number" value={data.dealCount} onChange={(v: string) => setData({...data, dealCount: Number(v)})} />
@@ -1985,7 +2274,12 @@ export default function App() {
           <Input label="Deals Value ($)" type="number" value={data.dealsValue} onChange={(v: string) => setData({...data, dealsValue: Number(v)})} />
         </Section>
 
-        <Section label="9 & 10. Growth Data" icon={<Briefcase size={14} />}>
+        <Section 
+          label="9 & 10. Growth Data" 
+          icon={<Briefcase size={14} />}
+          isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'growth'}
+          onHeaderClick={() => setActiveSectionId('growth')}
+        >
            <Input label="Chart Labels (comma sep)" value={data.growthLabels.join(', ')} onChange={(v: string) => setData({...data, growthLabels: v.split(',').map(s => s.trim())})} />
            <Input label="Contact Growth Values" value={data.growthContacts.join(', ')} onChange={(v: string) => setData({...data, growthContacts: v.split(',').map(s => Number(s.trim()))})} />
            <Input label="Deal Growth Values" value={data.growthDeals.join(', ')} onChange={(v: string) => setData({...data, growthDeals: v.split(',').map(s => Number(s.trim()))})} />
@@ -2181,6 +2475,7 @@ export default function App() {
              <Download size={18} className="group-hover:scale-110 transition-transform" /> Save as Web Format (HTML)
            </button>
         </div>
+        </div>
       </aside>
 
       {/* Main Preview Area */}
@@ -2210,12 +2505,38 @@ export default function App() {
         <div 
           ref={reportRef} 
           id="report-preview-area"
-          className="max-w-[1100px] mx-auto space-y-24 bg-[#E8B931] p-12 overflow-hidden shadow-2xl"
+          className="max-w-[1100px] mx-auto space-y-24 bg-[#E8B931] p-12 overflow-hidden shadow-2xl relative"
           style={{
             fontFamily: "'Inter', sans-serif",
             lineHeight: '1.25'
           } as React.CSSProperties}
         >
+          {/* Global Floating Elements Layer */}
+          <div className="absolute inset-0 pointer-events-none z-0">
+             <div className="relative w-full h-full pointer-events-auto">
+                {(data.floatingElements || []).map((el, idx) => (
+                  <FloatingElementComponent 
+                    key={el.id} 
+                    element={el} 
+                    isViewer={isViewerMode}
+                    isSelected={selectedElementId === el.id}
+                    onSelect={() => setSelectedElementId(el.id)}
+                    onChange={(updated) => {
+                      const copy = [...(data.floatingElements || [])];
+                      copy[idx] = updated;
+                      setData({...data, floatingElements: copy});
+                    }}
+                    onRemove={() => {
+                      const copy = [...(data.floatingElements || [])];
+                      copy.splice(idx, 1);
+                      setData({...data, floatingElements: copy});
+                      if (selectedElementId === el.id) setSelectedElementId(null);
+                    }}
+                  />
+                ))}
+             </div>
+          </div>
+
           {/* DYNAMIC SECTIONS */}
           {data.sections.map((section, idx) => (
             <React.Fragment key={section.id}>
@@ -2271,12 +2592,28 @@ function IconMetricRow({ icon, label, val }: { icon: React.ReactNode, label: str
   );
 }
 
-function Section({ label, icon, children }: any) {
+function Section({ label, icon, children, isActive, onHeaderClick }: any) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isActive && ref.current && document.activeElement !== ref.current) {
+      ref.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [isActive]);
+
   return (
-    <div className="mb-6">
-      <div className="flex items-center gap-2 mb-3 border-b border-stone-800 pb-1">
-        <span className="text-mustard font-bold">{icon}</span>
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">{label}</h3>
+    <div ref={ref} className={cn("mb-6 transition-all duration-500", isActive ? "scale-105" : "opacity-80 hover:opacity-100")}>
+      <div 
+        onClick={onHeaderClick}
+        className={cn(
+          "flex items-center gap-2 mb-3 border-b pb-1 cursor-pointer transition-colors",
+          isActive ? "border-mustard" : "border-stone-800"
+        )}
+      >
+        <span className={cn("font-bold transition-colors", isActive ? "text-mustard" : "text-stone-600")}>{icon}</span>
+        <h3 className={cn("text-[10px] font-black uppercase tracking-widest transition-colors", isActive ? "text-white" : "text-stone-500")}>
+          {label}
+        </h3>
       </div>
       <div className="space-y-4">{children}</div>
     </div>

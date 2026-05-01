@@ -13,15 +13,18 @@ import { cn } from '../lib/utils';
 
 interface AuthPageProps {
   onSuccess: () => void;
+  onContinueOffline?: () => void;
 }
 
-export function AuthPage({ onSuccess }: AuthPageProps) {
+export function AuthPage({ onSuccess, onContinueOffline }: AuthPageProps) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForgot, setShowForgot] = useState(false);
+
+  const [showOfflineOption, setShowOfflineOption] = useState(false);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -32,9 +35,10 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
       onSuccess();
     } catch (err: any) {
       if (err.code === 'auth/unauthorized-domain') {
-        setError(`Domain Unauthorized: Please add "${window.location.hostname}" to your Firebase Console (Auth > Settings > Authorized Domains).`);
+        setError(`Domain Unauthorized: "${window.location.hostname}" is not authorized in your Firebase Console.`);
+        setShowOfflineOption(true);
       } else if (err.code === 'auth/operation-not-allowed') {
-        setError("Sign-in method disabled: Please enable 'Google' in your Firebase Console (Authentication > Sign-in method).");
+        setError("Sign-in method disabled: Please enable 'Google' in your Firebase Console.");
       } else {
         setError(err.message);
       }
@@ -152,9 +156,27 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
           )}
 
           {error && (
-            <div className="p-4 bg-red-50 rounded-xl flex gap-3 text-red-600 text-xs font-bold items-start">
-              <Info size={16} className="shrink-0" />
-              <span>{error}</span>
+            <div className="p-4 bg-red-50 rounded-xl space-y-3">
+              <div className="flex gap-3 text-red-600 text-xs font-bold items-start">
+                <Info size={16} className="shrink-0" />
+                <span>{error}</span>
+              </div>
+              
+              {showOfflineOption && (
+                <div className="pt-2 border-t border-red-100">
+                  <p className="text-[10px] text-red-700 mb-3 leading-relaxed">
+                    This happens because your domain isn't in the Firebase allowlist. 
+                    You can still use the app in <strong>Offline Mode</strong>, but your progress won't be saved to the cloud.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onContinueOffline || onSuccess}
+                    className="w-full h-10 bg-white border-2 border-red-200 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                  >
+                    Continue in Offline Mode
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
