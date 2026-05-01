@@ -50,6 +50,12 @@ export interface FloatingElement {
   color?: string;
   fontSize?: number;
   fontWeight?: string;
+  fontFamily?: string;
+  textAlign?: 'left' | 'center' | 'right';
+  letterSpacing?: number;
+  lineHeight?: number;
+  fontStyle?: 'normal' | 'italic';
+  textDecoration?: 'none' | 'underline';
 }
 
 export interface ReportData {

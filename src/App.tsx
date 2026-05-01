@@ -358,11 +358,17 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
         </div>
       ) : element.type === 'text' ? (
         <div 
-          className="w-full h-full flex items-center justify-center text-center p-2 leading-tight"
+          className="w-full h-full flex items-center justify-center p-2"
           style={{ 
             color: element.color || '#000000', 
             fontSize: `${element.fontSize || 16}px`,
-            fontWeight: element.fontWeight || 'bold'
+            fontWeight: element.fontWeight || 'bold',
+            fontFamily: element.fontFamily || "'Inter', sans-serif",
+            textAlign: element.textAlign || 'center',
+            letterSpacing: `${element.letterSpacing || 0}px`,
+            lineHeight: element.lineHeight || 1.2,
+            fontStyle: element.fontStyle || 'normal',
+            textDecoration: element.textDecoration || 'none'
           }}
         >
           {element.content}
@@ -411,6 +417,16 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+
+  const handleSelectElement = (id: string | null) => {
+    setSelectedElementId(id);
+    if (id) setIsSidebarOpen(true);
+  };
+
+  const handleSelection = (sectionId: string | null) => {
+    setActiveSectionId(sectionId);
+    if (sectionId) setIsSidebarOpen(true);
+  };
   const [isViewerMode, setIsViewerMode] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [view, setView] = useState<'auth' | 'dashboard' | 'editor'>('auth');
@@ -524,8 +540,7 @@ export default function App() {
       isActive: activeSectionId === section.id,
       onClick: () => {
         if (!isViewerMode) {
-          setActiveSectionId(section.id);
-          setIsSidebarOpen(true);
+          handleSelection(section.id);
         }
       },
       reportRef: reportRef
@@ -1412,62 +1427,109 @@ export default function App() {
   };
 
   const handleDownloadPDF = async () => {
-    if (!reportRef.current || !data.sections) return;
+    if (!reportRef.current) return;
     setIsLoading(true);
     
-    window.scrollTo(0, 0);
+    const previewArea = document.getElementById('report-preview-area');
+    if (!previewArea) {
+      setIsLoading(false);
+      return;
+    }
 
     try {
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: 'a4',
-        compress: true
-      });
+      const sections = previewArea.querySelectorAll('.print\\:break-after-page');
+      let pdf: jsPDF | null = null;
 
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
+      // Special style injection for html2canvas to avoid oklab/oklch errors
+      const commonOnClone = (clonedDoc: Document) => {
+        const style = clonedDoc.createElement('style');
+        style.textContent = `
+          * { 
+            transition: none !important; 
+            animation: none !important; 
+            color-scheme: light !important;
+          }
+          :root {
+            /* Override oklch variables with hex for html2canvas */
+            --color-stone-50: #fafaf9 !important;
+            --color-stone-100: #f5f5f4 !important;
+            --color-stone-200: #e7e5e4 !important;
+            --color-stone-300: #d6d3d1 !important;
+            --color-stone-400: #a8a29e !important;
+            --color-stone-500: #78716c !important;
+            --color-stone-600: #57534e !important;
+            --color-stone-700: #44403c !important;
+            --color-stone-800: #292524 !important;
+            --color-stone-900: #1c1917 !important;
+            --color-stone-950: #0c0a09 !important;
+            --color-oklch-stone-50: #fafaf9 !important;
+            --color-oklch-stone-100: #f5f5f4 !important;
+            --color-oklch-stone-200: #e7e5e4 !important;
+            --color-oklch-stone-300: #d6d3d1 !important;
+            --color-oklch-stone-400: #a8a29e !important;
+            --color-oklch-stone-500: #78716c !important;
+            --color-oklch-stone-600: #57534e !important;
+            --color-oklch-stone-700: #44403c !important;
+            --color-oklch-stone-800: #292524 !important;
+            --color-oklch-stone-900: #1c1917 !important;
+            --color-oklch-stone-950: #0c0a09 !important;
+          }
+          /* Force all typical background colors into hex if oklch is used */
+          .bg-stone-900 { background-color: #1c1917 !important; }
+          .bg-stone-800 { background-color: #292524 !important; }
+          .bg-stone-950 { background-color: #0c0a09 !important; }
+          .border-stone-800 { border-color: #292524 !important; }
+          .border-stone-700 { border-color: #44403c !important; }
+          
+          .group\\/floating { ring: 0 !important; outline: none !important; }
+          .absolute.-top-12 { display: none !important; }
+          .cursor-nwse-resize { display: none !important; }
+        `;
+        clonedDoc.head.appendChild(style);
+      };
 
-      for (let i = 0; i < data.sections.length; i++) {
-        const section = data.sections[i];
-        const sectionEl = document.getElementById(section.id);
-        
-        if (!sectionEl) continue;
-
-        const canvas = await html2canvas(sectionEl, {
+      if (sections.length === 0) {
+        // Fallback to single page
+        const canvas = await html2canvas(previewArea, {
           scale: 2,
           useCORS: true,
-          allowTaint: true,
           backgroundColor: data.themeColor,
-          logging: false,
-          onclone: (clonedDoc) => {
-            // Apply fix for modern CSS colors in the clone
-            const style = clonedDoc.createElement('style');
-            style.textContent = `
-              * { transition: none !important; animation: none !important; }
-              [data-chart] { visibility: visible !important; }
-            `;
-            clonedDoc.head.appendChild(style);
-          }
+          onclone: commonOnClone
         });
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        pdf = new jsPDF({ orientation: 'p', unit: 'px', format: [canvas.width, canvas.height] });
+        pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+      } else {
+        for (let i = 0; i < sections.length; i++) {
+          const section = sections[i] as HTMLElement;
+          const canvas = await html2canvas(section, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: data.themeColor,
+            onclone: commonOnClone
+          });
 
-        const imgData = canvas.toDataURL('image/jpeg', 0.9);
-        const margin = 10;
-        const imgWidth = pageWidth - (margin * 2);
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+          const imgData = canvas.toDataURL('image/jpeg', 0.95);
+          const pageWidth = canvas.width;
+          const pageHeight = canvas.height;
 
-        if (i > 0) pdf.addPage();
-        
-        // Centering vertically if the content is short
-        const yPos = imgHeight < (pageHeight - margin * 2) 
-          ? (pageHeight - imgHeight) / 2 
-          : margin;
+          if (!pdf) {
+            pdf = new jsPDF({
+              orientation: pageWidth > pageHeight ? 'l' : 'p',
+              unit: 'px',
+              format: [pageWidth, pageHeight]
+            });
+          } else {
+            pdf.addPage([pageWidth, pageHeight], pageWidth > pageHeight ? 'l' : 'p');
+          }
 
-        pdf.addImage(imgData, 'JPEG', margin, yPos, imgWidth, Math.min(imgHeight, pageHeight - margin * 2));
+          pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+        }
       }
-      
-      const fileName = `Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
-      pdf.save(fileName);
+
+      if (pdf) {
+        pdf.save(`Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`);
+      }
     } catch (err) {
       console.error("PDF generation failed:", err);
       alert("Failed to generate PDF. Check console for details.");
@@ -1588,11 +1650,23 @@ export default function App() {
       <aside 
         id="sidebar-editor" 
         className={cn(
-          "bg-stone-900 text-white overflow-y-auto border-r border-stone-800 space-y-6 scrollbar-thin transition-all duration-500 ease-in-out fixed md:relative z-40 h-full pt-20 md:pt-6 shadow-2xl",
+          "bg-stone-900 text-white overflow-y-auto border-r border-stone-800 space-y-6 scrollbar-thin transition-all duration-500 ease-in-out fixed md:relative z-[60] h-full pt-20 md:pt-6 shadow-2xl",
           isSidebarOpen ? "w-full md:w-[400px] translate-x-0 p-6" : "w-0 -translate-x-full md:translate-x-0 md:w-0 p-0 overflow-hidden",
           isViewerMode && "hidden"
         )}
       >
+        {/* Minimize Button attached to sidebar edge */}
+        <button 
+          onClick={() => setIsSidebarOpen(false)}
+          className={cn(
+            "fixed top-1/2 -translate-y-1/2 z-[70] w-8 h-24 bg-stone-800 border border-stone-700/50 rounded-r-2xl flex flex-col items-center justify-center text-stone-500 hover:text-mustard hover:bg-stone-700 transition-all md:flex hidden group shadow-2xl",
+            isSidebarOpen ? "left-[400px]" : "left-0"
+          )}
+        >
+          <span className="text-[8px] font-black uppercase vertical-text -rotate-90 whitespace-nowrap mb-2 opacity-0 group-hover:opacity-100 transition-opacity">Minimize</span>
+          {isSidebarOpen ? <ChevronUp className="-rotate-90" size={16} /> : <ChevronUp className="rotate-90" size={16} />}
+        </button>
+
         <div className={cn("transition-opacity duration-300", !isSidebarOpen && "opacity-0")}>
           <div className="flex items-center gap-3 p-4 rounded-xl border border-stone-700" style={{ backgroundColor: 'rgba(41, 37, 36, 0.5)' }}>
             <button 
@@ -1607,8 +1681,12 @@ export default function App() {
               <h1 className="font-bold text-lg leading-tight uppercase tracking-tighter">Ajunaidi</h1>
               <p className="text-[10px] text-stone-400 uppercase tracking-widest font-black">Email Report Builder</p>
             </div>
-            <button onClick={() => setIsSidebarOpen(false)} className="md:block hidden text-stone-500 hover:text-white">
-              <X size={16} />
+            {/* Mobile Close Button */}
+            <button 
+              onClick={() => setIsSidebarOpen(false)} 
+              className="md:hidden block w-10 h-10 bg-stone-800 rounded-xl flex items-center justify-center text-stone-500 hover:text-white border border-stone-700"
+            >
+              <X size={20} />
             </button>
           </div>
         </div>
@@ -1632,17 +1710,9 @@ export default function App() {
           label="Cloud Storage" 
           icon={<ExternalLink size={14} />}
           isActive={activeSectionId === 'cloud'}
-          onHeaderClick={() => setActiveSectionId('cloud')}
+          onHeaderClick={() => handleSelection('cloud')}
         >
            <div className="space-y-3">
-             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg space-y-2">
-                <p className="text-[10px] font-bold text-red-400 flex items-center gap-2">
-                   <Settings2 size={12} /> Firebase Domain Fix
-                </p>
-                <p className="text-[9px] text-stone-400 leading-relaxed">
-                   If you see "Unauthorized Domain", add <code className="bg-stone-800 px-1 rounded text-white">email-report-creator.vercel.app</code> to your Firebase Console (Auth &gt; Settings &gt; Authorized Domains).
-                </p>
-             </div>
              <button 
                onClick={async () => {
                  await handleSaveReport();
@@ -1722,7 +1792,7 @@ export default function App() {
           label="Brand Identity" 
           icon={<Palette size={14} />}
           isActive={activeSectionId === 'brand'}
-          onHeaderClick={() => setActiveSectionId('brand')}
+          onHeaderClick={() => handleSelection('brand')}
         >
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -1765,7 +1835,7 @@ export default function App() {
           label="Text Colors" 
           icon={<Type size={14} />}
           isActive={activeSectionId === 'text-colors'}
-          onHeaderClick={() => setActiveSectionId('text-colors')}
+          onHeaderClick={() => handleSelection('text-colors')}
         >
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -1803,7 +1873,7 @@ export default function App() {
           label="Layout & Corner" 
           icon={<Maximize2 size={14} />}
           isActive={activeSectionId === 'layout'}
-          onHeaderClick={() => setActiveSectionId('layout')}
+          onHeaderClick={() => handleSelection('layout')}
         >
           <div className="space-y-4">
             <div>
@@ -1842,7 +1912,7 @@ export default function App() {
           label="Brand Assets" 
           icon={<Image size={14} />}
           isActive={activeSectionId === 'assets'}
-          onHeaderClick={() => setActiveSectionId('assets')}
+          onHeaderClick={() => handleSelection('assets')}
         >
               <label className="flex items-center gap-2 cursor-pointer bg-stone-800 border border-stone-700 rounded-lg p-3 hover:bg-stone-700 transition-all">
                 <Image size={14} className="text-mustard" />
@@ -1868,7 +1938,7 @@ export default function App() {
           label="Chart Image Replacements" 
           icon={<Image size={14} />}
           isActive={activeSectionId === 'charts'}
-          onHeaderClick={() => setActiveSectionId('charts')}
+          onHeaderClick={() => handleSelection('charts')}
         >
            <p className="text-[9px] text-stone-500 mb-3 uppercase font-black px-1 tracking-tighter">Replace dynamic charts with static images</p>
            <div className="space-y-4">
@@ -1884,7 +1954,7 @@ export default function App() {
           label="Graphic Elements" 
           icon={<Palette size={14} />}
           isActive={activeSectionId === 'graphics' || !!selectedElementId}
-          onHeaderClick={() => setActiveSectionId('graphics')}
+          onHeaderClick={() => handleSelection('graphics')}
         >
           <p className="text-[10px] text-stone-500 mb-4 px-1 uppercase font-black tracking-tighter italic">Floating sticks, shapes, grass or icons</p>
           <div className="space-y-4">
@@ -1893,7 +1963,7 @@ export default function App() {
                <div className="p-4 bg-stone-950 border border-[#E8B931]/30 rounded-xl space-y-4 shadow-inner ring-1 ring-[#E8B931]/10">
                  <div className="flex items-center justify-between">
                    <h3 className="text-[10px] font-black uppercase tracking-widest text-[#E8B931]">Design Inspector</h3>
-                   <button onClick={() => setSelectedElementId(null)} className="text-stone-500 hover:text-white"><X size={12}/></button>
+                   <button onClick={() => handleSelectElement(null)} className="text-stone-500 hover:text-white"><X size={12}/></button>
                  </div>
                  
                  {(() => {
@@ -1945,14 +2015,15 @@ export default function App() {
                               <textarea 
                                 value={el.content} 
                                 onChange={(e) => updateEl({ content: e.target.value })}
-                                className="w-full bg-stone-800 border border-stone-700 rounded p-2 text-[10px] text-white outline-none h-16"
+                                className="w-full bg-stone-800 border border-stone-700 rounded p-2 text-[10px] text-white outline-none h-16 focus:border-mustard transition-colors"
+                                placeholder="Enter text..."
                               />
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div className="space-y-1">
                                 <label className="text-[9px] uppercase font-bold text-stone-500">Font Size ({el.fontSize || 16}px)</label>
                                 <input 
-                                  type="range" min="8" max="150" step="1" 
+                                  type="range" min="8" max="250" step="1" 
                                   value={el.fontSize || 16} 
                                   onChange={(e) => updateEl({ fontSize: parseInt(e.target.value) })}
                                   className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
@@ -1963,13 +2034,66 @@ export default function App() {
                                 <select 
                                   value={el.fontWeight || 'bold'} 
                                   onChange={(e) => updateEl({ fontWeight: e.target.value })}
-                                  className="w-full bg-stone-800 border border-stone-700 rounded h-6 text-[9px] text-white outline-none"
+                                  className="w-full bg-stone-800 border border-stone-700 rounded h-7 text-[9px] text-white outline-none"
                                 >
                                   <option value="normal">Normal</option>
+                                  <option value="medium">Medium</option>
                                   <option value="bold">Bold</option>
                                   <option value="black">Black</option>
                                 </select>
                               </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                               <div className="space-y-1">
+                                <label className="text-[9px] uppercase font-bold text-stone-500">Align</label>
+                                <div className="flex bg-stone-800 rounded p-1 border border-stone-700">
+                                  {(['left', 'center', 'right'] as const).map(a => (
+                                    <button 
+                                      key={a}
+                                      onClick={() => updateEl({ textAlign: a })}
+                                      className={cn("flex-1 py-1 rounded text-[8px] font-black uppercase transition-colors", el.textAlign === a ? "bg-mustard text-stone-900" : "text-stone-400 hover:text-white")}
+                                    >
+                                      {a}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[9px] uppercase font-bold text-stone-500">Spacing</label>
+                                <input 
+                                  type="range" min="-5" max="20" step="1" 
+                                  value={el.letterSpacing || 0} 
+                                  onChange={(e) => updateEl({ letterSpacing: parseInt(e.target.value) })}
+                                  className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] uppercase font-bold text-stone-500">Font Family</label>
+                              <select 
+                                value={el.fontFamily || "'Inter', sans-serif"} 
+                                onChange={(e) => updateEl({ fontFamily: e.target.value })}
+                                className="w-full bg-stone-800 border border-stone-700 rounded h-7 text-[9px] text-white outline-none"
+                              >
+                                <option value="'Inter', sans-serif">Inter (Sans)</option>
+                                <option value="'Outfit', sans-serif">Outfit (Modern)</option>
+                                <option value="mono">Mono (Tech)</option>
+                                <option value="'Playfair Display', serif">Playfair (Serif)</option>
+                              </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                               <button 
+                                 onClick={() => updateEl({ fontStyle: el.fontStyle === 'italic' ? 'normal' : 'italic' })}
+                                 className={cn("py-1 rounded text-[8px] font-black uppercase transition-colors border border-stone-700", el.fontStyle === 'italic' ? "bg-mustard text-stone-900" : "bg-stone-800 text-stone-400")}
+                               >
+                                 Italic
+                               </button>
+                               <button 
+                                 onClick={() => updateEl({ textDecoration: el.textDecoration === 'underline' ? 'none' : 'underline' })}
+                                 className={cn("py-1 rounded text-[8px] font-black uppercase transition-colors border border-stone-700", el.textDecoration === 'underline' ? "bg-mustard text-stone-900" : "bg-stone-800 text-stone-400")}
+                               >
+                                 Underline
+                               </button>
                             </div>
                          </div>
                        )}
@@ -2109,7 +2233,7 @@ export default function App() {
           label="Section Management" 
           icon={<Maximize2 size={14} />}
           isActive={(data.sections || []).some(s => s.id === activeSectionId)}
-          onHeaderClick={() => setActiveSectionId('mgmt')}
+          onHeaderClick={() => handleSelection('mgmt')}
         >
           <p className="text-[10px] text-stone-500 mb-4 px-1 uppercase font-black tracking-tighter">Adjust background images for each page</p>
           <div className="space-y-4">
@@ -2141,7 +2265,7 @@ export default function App() {
           label="Hero Section Stats" 
           icon={<Telescope size={14} />}
           isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'cover'}
-          onHeaderClick={() => setActiveSectionId('hero')}
+          onHeaderClick={() => handleSelection('hero')}
         >
           <div className="space-y-4">
             {(data.heroStats || []).map((stat, idx) => (
@@ -2208,7 +2332,7 @@ export default function App() {
           label="1. Project Basics" 
           icon={<Settings2 size={14} />}
           isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'cover'}
-          onHeaderClick={() => setActiveSectionId('basics')}
+          onHeaderClick={() => handleSelection('basics')}
         >
           <Input label="Report Title" value={data.reportTitle} onChange={(v: string) => setData({...data, reportTitle: v})} />
           <Input label="Date Period" value={data.datePeriod} onChange={(v: string) => setData({...data, datePeriod: v})} />
@@ -2218,7 +2342,7 @@ export default function App() {
           label="2 & 3. Goals & Lists" 
           icon={<Filter size={14} />}
           isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'goals'}
-          onHeaderClick={() => setActiveSectionId('goals')}
+          onHeaderClick={() => handleSelection('goals')}
         >
            <p className="text-[9px] text-stone-500 mb-2 uppercase font-black px-1 tracking-tighter">Deals and Contacts Goals</p>
            <div className="grid grid-cols-2 gap-2 mb-4">
@@ -2238,7 +2362,7 @@ export default function App() {
           label="4 & 5. Analysis" 
           icon={<MessageSquare size={14} />}
           isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'goals'}
-          onHeaderClick={() => setActiveSectionId('analysis')}
+          onHeaderClick={() => handleSelection('analysis')}
         >
           <div className="space-y-4">
             <div>
@@ -2265,7 +2389,7 @@ export default function App() {
           label="6, 7 & 8. Top Metrics" 
           icon={<TrendingUp size={14} />}
           isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'growth'}
-          onHeaderClick={() => setActiveSectionId('metrics')}
+          onHeaderClick={() => handleSelection('metrics')}
         >
           <div className="grid grid-cols-2 gap-2 mb-2">
             <Input label="Contact Count" type="number" value={data.contactCount} onChange={(v: string) => setData({...data, contactCount: Number(v)})} />
@@ -2278,7 +2402,7 @@ export default function App() {
           label="9 & 10. Growth Data" 
           icon={<Briefcase size={14} />}
           isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'growth'}
-          onHeaderClick={() => setActiveSectionId('growth')}
+          onHeaderClick={() => handleSelection('growth')}
         >
            <Input label="Chart Labels (comma sep)" value={data.growthLabels.join(', ')} onChange={(v: string) => setData({...data, growthLabels: v.split(',').map(s => s.trim())})} />
            <Input label="Contact Growth Values" value={data.growthContacts.join(', ')} onChange={(v: string) => setData({...data, growthContacts: v.split(',').map(s => Number(s.trim()))})} />
@@ -2520,7 +2644,7 @@ export default function App() {
                     element={el} 
                     isViewer={isViewerMode}
                     isSelected={selectedElementId === el.id}
-                    onSelect={() => setSelectedElementId(el.id)}
+                    onSelect={() => handleSelectElement(el.id)}
                     onChange={(updated) => {
                       const copy = [...(data.floatingElements || [])];
                       copy[idx] = updated;
@@ -2530,7 +2654,7 @@ export default function App() {
                       const copy = [...(data.floatingElements || [])];
                       copy.splice(idx, 1);
                       setData({...data, floatingElements: copy});
-                      if (selectedElementId === el.id) setSelectedElementId(null);
+                      if (selectedElementId === el.id) handleSelectElement(null);
                     }}
                   />
                 ))}
