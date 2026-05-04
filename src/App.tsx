@@ -1459,35 +1459,69 @@ export default function App() {
     }
 
     try {
+      // 1. Ensure fonts are loaded before capturing
+      if ('fonts' in document) {
+        await (document as any).fonts.ready;
+      }
+      
+      // Small delay to allow any pending renders/settling
+      await new Promise(r => setTimeout(r, 500));
+
       const sections = previewArea.querySelectorAll('.print\\:break-after-page');
       let pdf: jsPDF | null = null;
 
       // Special style injection for html2canvas to avoid oklab/oklch errors
       const commonOnClone = (clonedDoc: Document) => {
-        // 1. Force replace oklch/oklab/color-mix in all style tags
-        const styles = clonedDoc.querySelectorAll('style');
-        styles.forEach(s => {
-          if (s.textContent) {
-            // Replace modern color functions with hex fallbacks to prevent html2canvas parsing errors
-            const colorRegex = /(oklch|oklab|color-mix)\((?:[^()]+|\([^()]*\))+\)/g;
-            s.textContent = s.textContent.replace(colorRegex, '#78716c');
-          }
+        const colorRegex = /(oklch|oklab|color-mix)\((?:[^()]+|\([^()]*\))+\)/g;
+        const colorFallback = '#78716c';
+        const win = clonedDoc.defaultView || window;
+
+        // 1. First, override getComputedStyle to intercept oklch before html2canvas sees it
+        const originalGetComputedStyle = win.getComputedStyle;
+        win.getComputedStyle = function(elt: Element, pseudoElt?: string | null) {
+          const style = originalGetComputedStyle.call(win, elt, pseudoElt);
+          return new Proxy(style, {
+            get(target, prop) {
+              const val = target[prop as keyof CSSStyleDeclaration];
+              if (typeof val === 'string' && (val.includes('oklch') || val.includes('oklab') || val.includes('color-mix'))) {
+                return colorFallback;
+              }
+              return val;
+            }
+          });
+        } as any;
+
+        // 2. Force replace in all style tags
+        clonedDoc.querySelectorAll('style').forEach(s => {
+          if (s.textContent) s.textContent = s.textContent.replace(colorRegex, colorFallback);
         });
 
-        // 2. Also handle inline styles on all elements
-        const allElements = clonedDoc.getElementsByTagName('*');
-        for (let i = 0; i < allElements.length; i++) {
-          const el = allElements[i] as HTMLElement;
-          const inlineStyle = el.getAttribute('style');
-          if (inlineStyle && (inlineStyle.includes('oklch') || inlineStyle.includes('oklab') || inlineStyle.includes('color-mix'))) {
-            const colorRegex = /(oklch|oklab|color-mix)\((?:[^()]+|\([^()]*\))+\)/g;
-            el.style.cssText = inlineStyle.replace(colorRegex, '#78716c');
+        // 3. Flatten critical computed styles to inline styles to bypass html2canvas's internal parser failures
+        const all = clonedDoc.getElementsByTagName('*');
+        for (let i = 0; i < all.length; i++) {
+          const el = all[i] as HTMLElement;
+          if (!el.style) continue;
+          
+          try {
+            const computed = originalGetComputedStyle.call(win, el);
+            const propsToFix = ['color', 'backgroundColor', 'borderColor', 'fill', 'stroke'];
+            
+            propsToFix.forEach(prop => {
+              const val = computed[prop as any];
+              if (typeof val === 'string' && (val.includes('oklch') || val.includes('oklab') || val.includes('color-mix'))) {
+                el.style[prop as any] = colorFallback;
+              }
+            });
+
+            // Also check inline style strings
+            const inline = el.getAttribute('style');
+            if (inline && (inline.includes('oklch') || inline.includes('oklab') || inline.includes('color-mix'))) {
+              el.style.cssText = inline.replace(colorRegex, colorFallback);
+            }
+          } catch (e) {
+            // Skip if element is not stylable
           }
         }
-
-        // 3. Instead of removing all links, we only remove ones that clearly target cross-origin CSS that might have oklch
-        // This is a gamble, but removing all links kills the design.
-        // We'll keep them and hope the injected styles below override them.
 
         const style = clonedDoc.createElement('style');
         style.textContent = `
@@ -1497,8 +1531,8 @@ export default function App() {
             color-scheme: light !important;
             text-rendering: optimizeLegibility !important;
           }
+          html { font-size: 16px !important; }
           :root {
-            /* Fix for modern browsers injecting oklch into standard tailwind vars */
             --color-stone-50: #fafaf9 !important;
             --color-stone-100: #f5f5f4 !important;
             --color-stone-200: #e7e5e4 !important;
@@ -1517,36 +1551,27 @@ export default function App() {
           body {
             background-color: ${data.themeColor} !important;
             color: black !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
           }
-          /* Ensure the preview area is visible and properly styled */
           #report-preview-area {
             background-color: ${data.themeColor} !important;
             width: 100% !important;
-            height: auto !important;
             display: block !important;
             overflow: visible !important;
+            position: static !important;
           }
           .print\\:break-after-page {
             box-shadow: none !important;
             margin-bottom: 0 !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            background-color: ${data.themeColor} !important;
           }
-          /* Force visibility of borders and backgrounds */
-          .bg-stone-950 { background-color: #0c0a09 !important; }
-          .bg-stone-900 { background-color: #1c1917 !important; }
-          .bg-stone-800 { background-color: #292524 !important; }
-          .bg-stone-50 { background-color: #fafaf9 !important; }
-          .border-stone-800 { border-color: #292524 !important; }
-          .border-stone-700 { border-color: #44403c !important; }
-          .border-stone-100 { border-color: #f5f5f4 !important; }
-          .text-stone-950 { color: #0c0a09 !important; }
-          .text-stone-400 { color: #a8a29e !important; }
-          .text-stone-500 { color: #78716c !important; }
-          
-          .group\\/floating { ring: 0 !important; outline: none !important; border: none !important; }
           .absolute.-top-12 { display: none !important; }
           .cursor-nwse-resize { display: none !important; }
           .pointer-events-none { pointer-events: auto !important; }
-          /* Fix for lucide icons and complex elements */
           svg { overflow: visible !important; }
         `;
         clonedDoc.head.appendChild(style);
