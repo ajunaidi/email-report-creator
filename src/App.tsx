@@ -8,7 +8,7 @@ import {
   BarChart3, Users, Mail, TrendingUp, MousePointerClick, 
   LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image, Type, Maximize2, FileText, Info,
   Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash, PieChart as PieChartIcon, ChevronUp, ChevronDown, LayoutDashboard, Chrome,
-  Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile
+  Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile, Square, Minus, ArrowRight
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -339,12 +339,13 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
         height: `${element.height}px`,
         zIndex: element.zIndex,
         transform: `rotate(${element.rotation || 0}deg)`,
-        opacity: element.opacity ?? 1
+        opacity: element.opacity ?? 1,
+        boxShadow: element.shadow ? '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)' : 'none'
       }}
       onMouseDown={handleMouseDown}
     >
       {element.type === 'image' ? (
-        <img src={element.content} className="w-full h-full object-cover rounded-lg shadow-xl" alt="" draggable={false} />
+        <img src={element.content} className="w-full h-full object-cover shadow-xl" style={{ borderRadius: `${element.borderRadius || 8}px` }} alt="" draggable={false} />
       ) : element.type === 'icon' ? (
         <div className="w-full h-full flex items-center justify-center pointer-events-none" style={{ color: element.color || '#E8B931' }}>
           {React.createElement(
@@ -355,31 +356,46 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
             element.content === 'triangle' ? Triangle :
             element.content === 'zap' ? Zap :
             element.content === 'award' ? Award :
-            element.content === 'smile' ? Smile : Heart,
-            { size: Math.min(element.width, element.height) }
+            element.content === 'smile' ? Smile :
+            element.content === 'arrow' ? ArrowRight :
+            element.content === 'square' ? Square :
+            element.content === 'minus' ? Minus : Heart,
+            { size: Math.min(element.width, element.height), strokeWidth: element.strokeWidth || 2 }
           )}
         </div>
       ) : element.type === 'text' ? (
         <div 
-          className="w-full h-full flex items-center justify-center p-2"
+          className="w-full h-full flex items-center justify-center"
           style={{ 
             color: element.color || '#000000', 
             fontSize: `${element.fontSize || 16}px`,
             fontWeight: element.fontWeight || 'bold',
             fontFamily: element.fontFamily || "'Inter', sans-serif",
-            textAlign: element.textAlign || 'center',
+            textAlign: (element.textAlign || 'center') as any,
             letterSpacing: `${element.letterSpacing || 0}px`,
             lineHeight: element.lineHeight || 1.2,
             fontStyle: element.fontStyle || 'normal',
-            textDecoration: element.textDecoration || 'none'
+            textDecoration: element.textDecoration || 'none',
+            borderRadius: `${element.borderRadius || 0}px`,
+            padding: `${element.padding || 8}px`,
+            backgroundColor: element.borderColor ? element.borderColor : 'transparent'
           }}
         >
           {element.content}
         </div>
       ) : (
-        <div className="w-full h-full bg-stone-950/20 border-2 border-stone-900/20 rounded-xl flex items-center justify-center p-4">
-           { element.content === 'circle' && <div className="w-full h-full rounded-full border-4 border-current opacity-40" /> }
-           { element.content === 'square' && <div className="w-full h-full rounded-lg border-4 border-current opacity-40" /> }
+        <div 
+          className="w-full h-full flex items-center justify-center pointer-events-none" 
+          style={{ 
+            color: element.color || '#E8B931',
+          }}
+        >
+           { element.content === 'circle' && <div className="w-full h-full rounded-full" style={{ border: `${element.strokeWidth || 4}px solid ${element.borderColor || 'currentColor'}`, opacity: element.opacity ?? 0.5 }} /> }
+           { element.content === 'square' && <div className="w-full h-full" style={{ border: `${element.strokeWidth || 4}px solid ${element.borderColor || 'currentColor'}`, borderRadius: `${element.borderRadius || 8}px`, opacity: element.opacity ?? 0.5 }} /> }
+           { element.content === 'rectangle' && <div className="w-full h-full" style={{ border: `${element.strokeWidth || 4}px solid ${element.borderColor || 'currentColor'}`, borderRadius: `${element.borderRadius || 4}px`, opacity: element.opacity ?? 0.5 }} /> }
+           { element.content === 'line' && <div className="w-full h-1 w-full" style={{ height: `${element.strokeWidth || 4}px`, backgroundColor: element.color || 'currentColor', opacity: element.opacity ?? 0.5 }} /> }
+           { element.content === 'solid-circle' && <div className="w-full h-full rounded-full" style={{ backgroundColor: element.color || 'currentColor', border: element.borderColor ? `${element.strokeWidth || 2}px solid ${element.borderColor}` : 'none', opacity: element.opacity ?? 0.5 }} /> }
+           { element.content === 'solid-square' && <div className="w-full h-full" style={{ backgroundColor: element.color || 'currentColor', border: element.borderColor ? `${element.strokeWidth || 2}px solid ${element.borderColor}` : 'none', borderRadius: `${element.borderRadius || 8}px`, opacity: element.opacity ?? 0.5 }} /> }
         </div>
       )}
       
@@ -417,6 +433,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Loading...');
   const [copySuccess, setCopySuccess] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
@@ -1432,6 +1449,7 @@ export default function App() {
 
   const handleDownloadPDF = async () => {
     if (!reportRef.current) return;
+    setLoadingMessage('Optimizing for PDF... (This may take a moment)');
     setIsLoading(true);
     
     const previewArea = document.getElementById('report-preview-area');
@@ -1451,7 +1469,6 @@ export default function App() {
         styles.forEach(s => {
           if (s.textContent) {
             // Replace modern color functions with hex fallbacks to prevent html2canvas parsing errors
-            // Using a slightly more robust regex to handle potential nested parentheses (one level)
             const colorRegex = /(oklch|oklab|color-mix)\((?:[^()]+|\([^()]*\))+\)/g;
             s.textContent = s.textContent.replace(colorRegex, '#78716c');
           }
@@ -1468,9 +1485,9 @@ export default function App() {
           }
         }
 
-        // 3. Remove all external stylesheets to avoid oklch errors from CDNs
-        const links = clonedDoc.querySelectorAll('link[rel="stylesheet"]');
-        links.forEach(l => l.remove()); 
+        // 3. Instead of removing all links, we only remove ones that clearly target cross-origin CSS that might have oklch
+        // This is a gamble, but removing all links kills the design.
+        // We'll keep them and hope the injected styles below override them.
 
         const style = clonedDoc.createElement('style');
         style.textContent = `
@@ -1481,7 +1498,7 @@ export default function App() {
             text-rendering: optimizeLegibility !important;
           }
           :root {
-            /* Full hex palette for compatibility */
+            /* Fix for modern browsers injecting oklch into standard tailwind vars */
             --color-stone-50: #fafaf9 !important;
             --color-stone-100: #f5f5f4 !important;
             --color-stone-200: #e7e5e4 !important;
@@ -1498,9 +1515,22 @@ export default function App() {
             --color-cream-dark: #f5f2e8 !important;
           }
           body {
-            background-color: white !important;
+            background-color: ${data.themeColor} !important;
+            color: black !important;
           }
-          /* Force all typical background colors into hex if oklch is used */
+          /* Ensure the preview area is visible and properly styled */
+          #report-preview-area {
+            background-color: ${data.themeColor} !important;
+            width: 100% !important;
+            height: auto !important;
+            display: block !important;
+            overflow: visible !important;
+          }
+          .print\\:break-after-page {
+            box-shadow: none !important;
+            margin-bottom: 0 !important;
+          }
+          /* Force visibility of borders and backgrounds */
           .bg-stone-950 { background-color: #0c0a09 !important; }
           .bg-stone-900 { background-color: #1c1917 !important; }
           .bg-stone-800 { background-color: #292524 !important; }
@@ -1512,10 +1542,12 @@ export default function App() {
           .text-stone-400 { color: #a8a29e !important; }
           .text-stone-500 { color: #78716c !important; }
           
-          .group\\/floating { ring: 0 !important; outline: none !important; }
+          .group\\/floating { ring: 0 !important; outline: none !important; border: none !important; }
           .absolute.-top-12 { display: none !important; }
           .cursor-nwse-resize { display: none !important; }
           .pointer-events-none { pointer-events: auto !important; }
+          /* Fix for lucide icons and complex elements */
+          svg { overflow: visible !important; }
         `;
         clonedDoc.head.appendChild(style);
       };
@@ -1523,25 +1555,42 @@ export default function App() {
       if (sections.length === 0) {
         // Fallback to single page
         const canvas = await html2canvas(previewArea, {
-          scale: 2,
+          scale: 3, // Higher scale for better quality
           useCORS: true,
           backgroundColor: data.themeColor,
-          onclone: commonOnClone
+          logging: true,
+          imageTimeout: 0,
+          onclone: commonOnClone,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: previewArea.scrollWidth,
+          windowHeight: previewArea.scrollHeight
         });
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        pdf = new jsPDF({ orientation: 'p', unit: 'px', format: [canvas.width, canvas.height] });
+        const imgData = canvas.toDataURL('image/jpeg', 1.0);
+        pdf = new jsPDF({ 
+          orientation: canvas.width > canvas.height ? 'l' : 'p', 
+          unit: 'px', 
+          format: [canvas.width, canvas.height],
+          hotfixes: ["px_scaling"]
+        });
         pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
       } else {
         for (let i = 0; i < sections.length; i++) {
           const section = sections[i] as HTMLElement;
           const canvas = await html2canvas(section, {
-            scale: 2,
+            scale: 3,
             useCORS: true,
             backgroundColor: data.themeColor,
-            onclone: commonOnClone
+            logging: true,
+            imageTimeout: 0,
+            onclone: commonOnClone,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: section.scrollWidth,
+            windowHeight: section.scrollHeight
           });
 
-          const imgData = canvas.toDataURL('image/jpeg', 0.95);
+          const imgData = canvas.toDataURL('image/jpeg', 1.0);
           const pageWidth = canvas.width;
           const pageHeight = canvas.height;
 
@@ -1549,7 +1598,8 @@ export default function App() {
             pdf = new jsPDF({
               orientation: pageWidth > pageHeight ? 'l' : 'p',
               unit: 'px',
-              format: [pageWidth, pageHeight]
+              format: [pageWidth, pageHeight],
+              hotfixes: ["px_scaling"]
             });
           } else {
             pdf.addPage([pageWidth, pageHeight], pageWidth > pageHeight ? 'l' : 'p');
@@ -2141,6 +2191,24 @@ export default function App() {
                                   className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
                                 />
                               </div>
+                              <div className="space-y-1">
+                                <label className="text-[9px] uppercase font-bold text-stone-500">Padding ({el.padding || 8}px)</label>
+                                <input 
+                                  type="range" min="0" max="100" step="1" 
+                                  value={el.padding || 8} 
+                                  onChange={(e) => updateEl({ padding: parseInt(e.target.value) })}
+                                  className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[9px] uppercase font-bold text-stone-500">Line Height ({el.lineHeight || 1.2})</label>
+                                <input 
+                                  type="range" min="0.5" max="3" step="0.1" 
+                                  value={el.lineHeight || 1.2} 
+                                  onChange={(e) => updateEl({ lineHeight: parseFloat(e.target.value) })}
+                                  className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
+                                />
+                              </div>
                             </div>
                             <div className="space-y-1">
                               <label className="text-[9px] uppercase font-bold text-stone-500">Font Family</label>
@@ -2172,9 +2240,22 @@ export default function App() {
                          </div>
                        )}
 
-                       {el.type !== 'image' && (
+                       {(el.type === 'shape' || el.type === 'icon') && (
                          <div className="space-y-1">
-                           <label className="text-[9px] uppercase font-bold text-stone-500">Element Color</label>
+                           <label className="text-[9px] uppercase font-bold text-stone-500">Stroke Width ({el.strokeWidth || 2})</label>
+                           <input 
+                             type="range" min="1" max="20" step="1" 
+                             value={el.strokeWidth || (el.type === 'shape' ? 4 : 2)} 
+                             onChange={(e) => updateEl({ strokeWidth: parseInt(e.target.value) })}
+                             className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
+                           />
+                         </div>
+                       )}
+
+                       {el.type !== 'image' && (
+                         <>
+                           <div className="space-y-1">
+                           <label className="text-[9px] uppercase font-bold text-stone-500">Main Color</label>
                            <div className="flex flex-wrap gap-1">
                              {['#E8B931', '#22c55e', '#ef4444', '#3b82f6', '#f59e0b', '#ec4899', '#ffffff', '#000000'].map(c => (
                                <button 
@@ -2186,7 +2267,32 @@ export default function App() {
                              ))}
                            </div>
                          </div>
-                       )}
+                         <div className="space-y-1">
+                           <label className="text-[9px] uppercase font-bold text-stone-500">Border Color (or Label BG)</label>
+                           <div className="flex flex-wrap gap-1">
+                             {['transparent', '#E8B931', '#22c55e', '#ef4444', '#3b82f6', '#ffffff', '#000000', '#78716c'].map(c => (
+                               <button 
+                                 key={c}
+                                 onClick={() => updateEl({ borderColor: c === 'transparent' ? undefined : c })}
+                                 className={cn("w-5 h-5 rounded-full border border-white/20 relative overflow-hidden", el.borderColor === c && "ring-2 ring-mustard")}
+                                 style={{ backgroundColor: c === 'transparent' ? '#333' : c }}
+                               >
+                                 {c === 'transparent' && <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-red-500 to-transparent opacity-50" />}
+                               </button>
+                             ))}
+                           </div>
+                         </div>
+                         <div className="space-y-1">
+                            <label className="text-[9px] uppercase font-bold text-stone-500">Shadow</label>
+                            <button 
+                              onClick={() => updateEl({ shadow: !el.shadow })}
+                              className={cn("w-full py-1 rounded text-[8px] font-black uppercase transition-colors border border-stone-700", el.shadow ? "bg-mustard text-stone-900" : "bg-stone-800 text-stone-400")}
+                            >
+                              {el.shadow ? 'Solid shadow' : 'Lifted shadow'}
+                            </button>
+                         </div>
+                       </>
+                     )}
                      </div>
                    );
                  })()}
@@ -2200,11 +2306,15 @@ export default function App() {
                  { id: 'leaf', icon: Leaf, label: 'Leaf' },
                  { id: 'star', icon: Star, label: 'Star' },
                  { id: 'heart', icon: Heart, label: 'Heart' },
+                 { id: 'zap', icon: Zap, label: 'Zap' },
+                 { id: 'award', icon: Award, label: 'Award' },
+                 { id: 'smile', icon: Smile, label: 'Smile' },
+                 { id: 'arrow', icon: ArrowRight, label: 'Arrow' },
                ].map(item => (
                  <button 
                    key={item.id}
                    onClick={() => {
-                     const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'icon', content: item.id, top: 200, left: 200, width: 40, height: 40, zIndex: 10, color: '#22c55e' };
+                     const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'icon', content: item.id, top: 200, left: 200, width: 40, height: 40, zIndex: 10, color: '#E8B931' };
                      setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
                    }}
                    className="flex flex-col items-center justify-center p-2 bg-stone-800 rounded-lg border border-stone-700 hover:border-mustard transition-all group"
@@ -2218,30 +2328,57 @@ export default function App() {
             <div className="grid grid-cols-2 gap-2">
               <button 
                 onClick={() => {
-                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'circle', top: 100, left: 100, width: 100, height: 100, zIndex: 1, opacity: 0.5 };
+                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'circle', top: 100, left: 100, width: 100, height: 100, zIndex: 1, opacity: 0.5, color: '#E8B931', strokeWidth: 4 };
                   setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
                 }}
                 className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
               >
-                + Circle
+                + Empty Circle
               </button>
               <button 
                 onClick={() => {
-                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'square', top: 120, left: 120, width: 100, height: 100, zIndex: 1, opacity: 0.5 };
+                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'solid-circle', top: 100, left: 100, width: 100, height: 100, zIndex: 1, opacity: 0.5, color: '#E8B931' };
                   setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
                 }}
                 className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
               >
-                + Square
+                + Solid Circle
               </button>
               <button 
                 onClick={() => {
-                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'icon', content: 'triangle', top: 140, left: 140, width: 80, height: 80, zIndex: 1, opacity: 0.5, color: '#E8B931' };
+                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'square', top: 120, left: 120, width: 100, height: 100, zIndex: 1, opacity: 0.5, color: '#E8B931', strokeWidth: 4 };
                   setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
                 }}
                 className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
               >
-                + Triangle
+                + Empty Square
+              </button>
+              <button 
+                onClick={() => {
+                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'solid-square', top: 120, left: 120, width: 100, height: 100, zIndex: 1, opacity: 0.5, color: '#E8B931' };
+                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
+                }}
+                className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
+              >
+                + Solid Square
+              </button>
+              <button 
+                onClick={() => {
+                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'rectangle', top: 140, left: 140, width: 200, height: 100, zIndex: 1, opacity: 0.5, color: '#E8B931', strokeWidth: 4 };
+                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
+                }}
+                className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
+              >
+                + Rectangle
+              </button>
+              <button 
+                onClick={() => {
+                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'line', top: 160, left: 160, width: 200, height: 10, zIndex: 1, opacity: 0.5, color: '#E8B931', strokeWidth: 4 };
+                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
+                }}
+                className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
+              >
+                + Line
               </button>
               <button 
                 onClick={() => {
@@ -2709,10 +2846,11 @@ export default function App() {
         )}
 
         {isLoading && (
-          <div className="absolute inset-0 bg-stone-900/10 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-4">
+          <div className="fixed inset-0 bg-stone-900/20 backdrop-blur-sm z-[9999] flex items-center justify-center pointer-events-auto">
+            <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-4 text-center max-w-sm">
               <Loader2 className="animate-spin text-mustard" size={40} />
-              <p className="font-bold text-stone-800 uppercase tracking-widest text-xs">Loading Shared Report...</p>
+              <p className="font-bold text-stone-800 uppercase tracking-widest text-[10px]">{loadingMessage}</p>
+              <p className="text-[10px] text-stone-500">Please do not close this tab or scroll the page until finished.</p>
             </div>
           </div>
         )}

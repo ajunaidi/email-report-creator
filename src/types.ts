@@ -56,6 +56,11 @@ export interface FloatingElement {
   lineHeight?: number;
   fontStyle?: 'normal' | 'italic';
   textDecoration?: 'none' | 'underline';
+  padding?: number;
+  borderRadius?: number;
+  strokeWidth?: number;
+  shadow?: boolean;
+  borderColor?: string;
 }
 
 export interface ReportData {
