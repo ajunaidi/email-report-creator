@@ -21,17 +21,19 @@ export function Dashboard({ onNewReport, onSelectReport }: DashboardProps) {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    loadReports();
+    loadReports(true);
   }, []);
 
-  const loadReports = async () => {
+  const loadReports = async (isInitialLog = false) => {
     setLoading(true);
     try {
       let data = await getUserReports();
       
-      // Seed data if first user login and no reports exist
-      if (data.length === 0) {
+      // Only seed data on initial load if no reports exist and we haven't seeded before on this device
+      const hasSeeded = localStorage.getItem('ajunaidi_seeded');
+      if (data.length === 0 && isInitialLog && !hasSeeded) {
         await seedInitialData();
+        localStorage.setItem('ajunaidi_seeded', 'true');
         data = await getUserReports();
       }
 
@@ -48,15 +50,44 @@ export function Dashboard({ onNewReport, onSelectReport }: DashboardProps) {
     }
   };
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!confirm('Are you sure you want to delete this report?')) return;
+    if (!id || deletingId) return;
+    
+    if (!confirm('Are you sure you want to delete this report? This action cannot be undone.')) return;
+    
+    setDeletingId(id);
+    const originalReports = [...reports];
+    
     try {
+      console.log('Attempting to delete report:', id);
+      // Remove from UI immediately for better "feel"
+      setReports(prev => prev.filter(r => r.id !== id));
+      
       await deleteReport(id);
-      setReports(reports.filter(r => r.id !== id));
+      console.log('Report deleted successfully from Firestore:', id);
+      alert('Report deleted successfully.');
     } catch (err) {
-      console.error(err);
-      alert('Failed to delete report');
+      console.error('Delete failed:', err);
+      // Revert if failed
+      setReports(originalReports);
+      
+      let errorMsg = 'Failed to delete report from database.';
+      if (err instanceof Error) {
+        try {
+          const parsed = JSON.parse(err.message);
+          if (parsed.error && parsed.error.includes('permissions')) {
+            errorMsg = 'Permission denied: You do not have permission to delete this report.';
+          }
+        } catch {
+          errorMsg = `Error: ${err.message}`;
+        }
+      }
+      alert(errorMsg);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -146,13 +177,24 @@ export function Dashboard({ onNewReport, onSelectReport }: DashboardProps) {
                   whileHover={{ y: -5 }}
                   className="bg-white p-8 rounded-[40px] shadow-sm border border-stone-100 group relative overflow-hidden"
                 >
-                  <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                     <button 
-                       onClick={(e) => handleDelete(e, report.id)}
-                       className="text-stone-300 hover:text-red-500 transition-colors"
-                     >
-                        <Trash2 size={18} />
-                     </button>
+                  <div className="absolute top-0 right-0 p-4 z-20">
+                    <button 
+                      onClick={(e) => handleDelete(e, report.id)}
+                      disabled={deletingId === report.id}
+                      className={cn(
+                        "w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-md hover:shadow-lg active:scale-90",
+                        deletingId === report.id 
+                          ? "bg-stone-100 text-stone-300 cursor-not-allowed" 
+                          : "bg-white/90 backdrop-blur-sm border border-stone-200 text-stone-400 hover:text-red-500 hover:border-red-200"
+                      )}
+                      title="Delete Report"
+                    >
+                      {deletingId === report.id ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : (
+                         <Trash2 size={18} />
+                      )}
+                    </button>
                   </div>
 
                   <div className="w-14 h-14 bg-stone-50 rounded-2xl flex items-center justify-center text-stone-400 mb-6 group-hover:bg-[#E8B931] group-hover:text-stone-950 transition-colors">

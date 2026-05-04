@@ -8,7 +8,7 @@ import {
   BarChart3, Users, Mail, TrendingUp, MousePointerClick, 
   LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image, Type, Maximize2, FileText, Info,
   Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash, PieChart as PieChartIcon, ChevronUp, ChevronDown, LayoutDashboard, Chrome,
-  Sprout, Leaf, Star, Heart, Triangle
+  Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -34,7 +34,7 @@ import {
   User,
   signOut
 } from 'firebase/auth';
-import { saveReport, getReport } from './services/reportService';
+import { saveReport, getReport, deleteReport } from './services/reportService';
 
 import { AuthPage } from './components/AuthPage';
 import { Dashboard } from './components/Dashboard';
@@ -352,7 +352,10 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
             element.content === 'leaf' ? Leaf :
             element.content === 'star' ? Star :
             element.content === 'heart' ? Heart :
-            element.content === 'triangle' ? Triangle : Heart,
+            element.content === 'triangle' ? Triangle :
+            element.content === 'zap' ? Zap :
+            element.content === 'award' ? Award :
+            element.content === 'smile' ? Smile : Heart,
             { size: Math.min(element.width, element.height) }
           )}
         </div>
@@ -387,8 +390,9 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
             <div className="w-px h-3 bg-stone-700" />
             <button 
               onClick={(e) => { e.stopPropagation(); onRemove(); }}
-              className="hover:text-red-500 transition-colors"
+              className="hover:text-red-500 transition-all flex items-center gap-1 group"
             >
+              <Trash2 size={10} className="group-hover:scale-110 transition-transform" />
               Remove
             </button>
           </div>
@@ -1442,15 +1446,42 @@ export default function App() {
 
       // Special style injection for html2canvas to avoid oklab/oklch errors
       const commonOnClone = (clonedDoc: Document) => {
+        // 1. Force replace oklch/oklab/color-mix in all style tags
+        const styles = clonedDoc.querySelectorAll('style');
+        styles.forEach(s => {
+          if (s.textContent) {
+            // Replace modern color functions with hex fallbacks to prevent html2canvas parsing errors
+            // Using a slightly more robust regex to handle potential nested parentheses (one level)
+            const colorRegex = /(oklch|oklab|color-mix)\((?:[^()]+|\([^()]*\))+\)/g;
+            s.textContent = s.textContent.replace(colorRegex, '#78716c');
+          }
+        });
+
+        // 2. Also handle inline styles on all elements
+        const allElements = clonedDoc.getElementsByTagName('*');
+        for (let i = 0; i < allElements.length; i++) {
+          const el = allElements[i] as HTMLElement;
+          const inlineStyle = el.getAttribute('style');
+          if (inlineStyle && (inlineStyle.includes('oklch') || inlineStyle.includes('oklab') || inlineStyle.includes('color-mix'))) {
+            const colorRegex = /(oklch|oklab|color-mix)\((?:[^()]+|\([^()]*\))+\)/g;
+            el.style.cssText = inlineStyle.replace(colorRegex, '#78716c');
+          }
+        }
+
+        // 3. Remove all external stylesheets to avoid oklch errors from CDNs
+        const links = clonedDoc.querySelectorAll('link[rel="stylesheet"]');
+        links.forEach(l => l.remove()); 
+
         const style = clonedDoc.createElement('style');
         style.textContent = `
           * { 
             transition: none !important; 
             animation: none !important; 
             color-scheme: light !important;
+            text-rendering: optimizeLegibility !important;
           }
           :root {
-            /* Override oklch variables with hex for html2canvas */
+            /* Full hex palette for compatibility */
             --color-stone-50: #fafaf9 !important;
             --color-stone-100: #f5f5f4 !important;
             --color-stone-200: #e7e5e4 !important;
@@ -1462,28 +1493,29 @@ export default function App() {
             --color-stone-800: #292524 !important;
             --color-stone-900: #1c1917 !important;
             --color-stone-950: #0c0a09 !important;
-            --color-oklch-stone-50: #fafaf9 !important;
-            --color-oklch-stone-100: #f5f5f4 !important;
-            --color-oklch-stone-200: #e7e5e4 !important;
-            --color-oklch-stone-300: #d6d3d1 !important;
-            --color-oklch-stone-400: #a8a29e !important;
-            --color-oklch-stone-500: #78716c !important;
-            --color-oklch-stone-600: #57534e !important;
-            --color-oklch-stone-700: #44403c !important;
-            --color-oklch-stone-800: #292524 !important;
-            --color-oklch-stone-900: #1c1917 !important;
-            --color-oklch-stone-950: #0c0a09 !important;
+            --color-mustard: #e9b949 !important;
+            --color-cream: #fffdf5 !important;
+            --color-cream-dark: #f5f2e8 !important;
+          }
+          body {
+            background-color: white !important;
           }
           /* Force all typical background colors into hex if oklch is used */
+          .bg-stone-950 { background-color: #0c0a09 !important; }
           .bg-stone-900 { background-color: #1c1917 !important; }
           .bg-stone-800 { background-color: #292524 !important; }
-          .bg-stone-950 { background-color: #0c0a09 !important; }
+          .bg-stone-50 { background-color: #fafaf9 !important; }
           .border-stone-800 { border-color: #292524 !important; }
           .border-stone-700 { border-color: #44403c !important; }
+          .border-stone-100 { border-color: #f5f5f4 !important; }
+          .text-stone-950 { color: #0c0a09 !important; }
+          .text-stone-400 { color: #a8a29e !important; }
+          .text-stone-500 { color: #78716c !important; }
           
           .group\\/floating { ring: 0 !important; outline: none !important; }
           .absolute.-top-12 { display: none !important; }
           .cursor-nwse-resize { display: none !important; }
+          .pointer-events-none { pointer-events: auto !important; }
         `;
         clonedDoc.head.appendChild(style);
       };
@@ -1532,7 +1564,14 @@ export default function App() {
       }
     } catch (err) {
       console.error("PDF generation failed:", err);
-      alert("Failed to generate PDF. Check console for details.");
+      let errorDetail = "";
+      if (err instanceof Error) {
+        errorDetail = err.message;
+        if (errorDetail.toLowerCase().includes('oklab') || errorDetail.toLowerCase().includes('oklch')) {
+          errorDetail = "Modern CSS color functions detected. We attempted to fix them, but some remain.";
+        }
+      }
+      alert(`Failed to generate PDF: ${errorDetail || 'Unknown error'}\n\nPlease try again, or download as HTML which is more reliable.`);
     } finally {
       setIsLoading(false);
     }
@@ -1723,6 +1762,41 @@ export default function App() {
                <Save size={16} className="text-mustard" />
                Save to Account
              </button>
+
+             <button 
+               onClick={async () => {
+                 if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
+                   try {
+                     if (reportId) {
+                       await deleteReport(reportId);
+                       alert('Report deleted from cloud.');
+                     }
+                     setView('dashboard');
+                   } catch (err) {
+                     console.error('Delete failed:', err);
+                     let errorMsg = 'Failed to delete report.';
+                     if (err instanceof Error) {
+                       try {
+                         const parsed = JSON.parse(err.message);
+                         if (parsed.error && parsed.error.includes('permissions')) {
+                           errorMsg = 'Permission denied: You do not have permission to delete this report.';
+                         } else {
+                           errorMsg = parsed.error || err.message;
+                         }
+                       } catch {
+                         errorMsg = err.message;
+                       }
+                     }
+                     alert(errorMsg);
+                   }
+                 }
+               }}
+               className="w-full h-12 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest transition-all border border-red-500/20"
+             >
+               <Trash2 size={16} />
+               Delete Report
+             </button>
+
              <button 
                onClick={() => {
                  alert('Google Drive integration requires an API Key. Please configure GOOGLE_DRIVE_API_KEY in your settings.');
@@ -2217,10 +2291,19 @@ export default function App() {
                         const copy = [...(data.floatingElements || [])];
                         copy.splice(i, 1);
                         setData({...data, floatingElements: copy});
+                        if (selectedElementId === el.id) handleSelectElement(null);
                       }}
-                      className="text-stone-500 hover:text-red-500"
+                      title="Delete Element"
+                      className="text-stone-500 hover:text-red-500 p-1"
                     >
                       <Trash size={12} />
+                    </button>
+                    <button 
+                      onClick={() => handleSelectElement(el.id)}
+                      className={cn("text-stone-500 hover:text-mustard p-1", selectedElementId === el.id && "text-mustard")}
+                      title="Select Element"
+                    >
+                      <Settings2 size={12} />
                     </button>
                   </div>
                 </div>
@@ -2238,9 +2321,20 @@ export default function App() {
           <p className="text-[10px] text-stone-500 mb-4 px-1 uppercase font-black tracking-tighter">Adjust background images for each page</p>
           <div className="space-y-4">
             {(data.sections || []).map((section, idx) => (
-              <div key={section.id} className="p-3 bg-stone-800 rounded-lg border border-stone-700 space-y-2">
+              <div key={section.id} className="p-3 bg-stone-800 rounded-lg border border-stone-700 space-y-2 group">
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] font-black uppercase text-stone-500">Page {idx + 1}: {section.type}</span>
+                  <button 
+                    onClick={() => {
+                      if (confirm('Remove this section/page?')) {
+                        removeSection(section.id);
+                      }
+                    }}
+                    className="text-stone-600 hover:text-red-500 transition-colors"
+                    title="Delete Section"
+                  >
+                    <Trash2 size={12} />
+                  </button>
                 </div>
                 <ImageUploader 
                   label="Background Image" 
