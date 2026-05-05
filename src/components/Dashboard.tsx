@@ -27,15 +27,8 @@ export function Dashboard({ onNewReport, onSelectReport }: DashboardProps) {
   const loadReports = async (isInitialLog = false) => {
     setLoading(true);
     try {
-      let data = await getUserReports();
-      
-      // Only seed data on initial load if no reports exist and we haven't seeded before on this device
-      const hasSeeded = localStorage.getItem('ajunaidi_seeded');
-      if (data.length === 0 && isInitialLog && !hasSeeded) {
-        await seedInitialData();
-        localStorage.setItem('ajunaidi_seeded', 'true');
-        data = await getUserReports();
-      }
+      // Remove automatic seeding as requested by user
+      const data = await getUserReports();
 
       const sortedData = data.sort((a, b) => {
         const timeA = a.updatedAt?.toMillis() || a.createdAt?.toMillis() || 0;

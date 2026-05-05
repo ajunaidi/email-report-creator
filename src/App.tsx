@@ -10,7 +10,8 @@ import {
   Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash, PieChart as PieChartIcon, ChevronUp, ChevronDown, LayoutDashboard, Chrome,
   Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile, Square, Minus, ArrowRight, Layers,
   ChevronRight, ChevronLeft, Hash,
-  Monitor, Redo2, Undo2, CloudCheck, Search, Globe, Box, Grid3X3, Wand2, UploadCloud, FolderHeart, LayoutTemplate
+  Monitor, Redo2, Undo2, CloudCheck, Search, Globe, Box, Grid3X3, Wand2, UploadCloud, FolderHeart, LayoutTemplate,
+  PlusSquare, Settings, Accessibility, FolderOpen, Printer, History, CloudOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import html2canvas from 'html2canvas';
@@ -568,6 +569,65 @@ function ContextToolbar({ selectedElementId, elements, updateEl, deleteEl, data 
   );
 }
 
+const INITIAL_EMPTY_DATA: ReportData = {
+  reportTitle: "Untitled Report",
+  pageSize: 'A4',
+  orientation: 'portrait',
+  datePeriod: "May 2024",
+  tags: [],
+  sections: [],
+  floatingElements: [],
+  themeColor: '#ffffff',
+  accentColor: '#E8B931',
+  cardColor: '#f9fafb',
+  textColor: '#1a1a1a',
+  h1Color: '#1a1a1a',
+  h2Color: '#1a1a1a',
+  h3Color: '#4b5563',
+  descColor: '#6b7280',
+  fontFamily: 'sans',
+  borderRadius: 'xl',
+  dealsGoal: 0,
+  dealsCount: 0,
+  conversionGoal: 0,
+  conversionCount: 0,
+  listContacts: 0,
+  listDeals: 0,
+  summary: "",
+  recommendations: [],
+  contactCount: 0,
+  dealCount: 0,
+  dealsValue: 0,
+  growthLabels: [],
+  growthDeals: [],
+  growthContacts: [],
+  dealSources: [],
+  accountContacts: [],
+  emailsSentGoal: 0,
+  emailsOpenedGoal: 0,
+  linkClicksGoal: 0,
+  actualSent: 0,
+  actualOpens: 0,
+  actualClicks: 0,
+  actualReplies: 0,
+  metricsEmailsSent: 0,
+  metricsOpens: 0,
+  metricsOpenRate: "0%",
+  sentTrend: [],
+  opensTrend: [],
+  linkClicksTotal: 0,
+  linkClickRateStr: "0%",
+  funnelSent: 0,
+  funnelOpened: 0,
+  funnelClicked: 0,
+  engagementOpensTrend: [],
+  engagementClicksTrend: [],
+  unsubscribes: 0,
+  unsubscribeRateStr: "0%",
+  repliesTotal: 0,
+  campaignsPerformance: []
+};
+
 export default function App() {
   const [data, setData] = useState<ReportData>(MOCK_FULL_DATA);
   const [isViewerMode, setIsViewerMode] = useState(false);
@@ -588,6 +648,38 @@ export default function App() {
   const [unsplashQuery, setUnsplashQuery] = useState('');
   const [unsplashResults, setUnsplashResults] = useState<any[]>([]);
   const [isSearchingPhotos, setIsSearchingPhotos] = useState(false);
+  const [isFileMenuOpen, setIsFileMenuOpen] = useState(false);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
+        setIsFileMenuOpen(false);
+      }
+    };
+    if (isFileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isFileMenuOpen]);
+
+  const handleTrash = () => {
+    if (window.confirm("Are you sure you want to move this design to trash?")) {
+      setIsFileMenuOpen(false);
+      setView('dashboard');
+      setReportId(null);
+    }
+  };
+
+  const handleMakeCopy = () => {
+    setIsFileMenuOpen(false);
+    setData(prev => ({
+      ...prev,
+      reportTitle: `${prev.reportTitle || 'Untitled'} Copy`
+    }));
+    setReportId(null);
+    alert("Design duplicated!");
+  };
   const [uploadedFiles, setUploadedFiles] = useState<{ id: string, url: string }[]>([]);
 
   const [isUploading, setIsUploading] = useState(false);
@@ -664,10 +756,22 @@ export default function App() {
   const [redoStack, setRedoStack] = useState<ReportData[]>([]);
   const [clipboard, setClipboard] = useState<FloatingElement | null>(null);
 
-  const pushToHistory = useCallback((newData: ReportData) => {
-    setHistory(prev => [...prev.slice(-49), data]); // Keep last 50 states
+  const pushToHistory = useCallback((stateToSave: ReportData) => {
+    setHistory(prev => [...prev.slice(-49), stateToSave]);
     setRedoStack([]);
-  }, [data]);
+  }, []);
+
+  const updateReportData = useCallback((updates: Partial<ReportData> | ((prev: ReportData) => ReportData), saveToHistory = true) => {
+    if (saveToHistory) {
+      pushToHistory(data);
+    }
+    setData(prev => {
+      if (typeof updates === 'function') {
+        return updates(prev);
+      }
+      return { ...prev, ...updates };
+    });
+  }, [data, pushToHistory]);
 
   const undo = useCallback(() => {
     if (history.length === 0) return;
@@ -767,7 +871,6 @@ export default function App() {
   }, [view, isViewerMode, undo, redo, copyElement, pasteElement, duplicateElement, selectedElementId, data]);
 
   const addElement = (type: 'image' | 'shape' | 'icon' | 'text' | 'chart', content: string) => {
-    pushToHistory(data);
     const newEl: FloatingElement = {
       id: `fe-${Date.now()}`,
       type,
@@ -780,12 +883,14 @@ export default function App() {
       opacity: 1,
       color: type === 'text' ? '#000000' : '#E8B931'
     };
-    setData({ ...data, floatingElements: [...(data.floatingElements || []), newEl] });
+    updateReportData(prev => ({
+      ...prev,
+      floatingElements: [...(prev.floatingElements || []), newEl]
+    }), true);
     handleSelectElement(newEl.id);
   };
 
   const handleDrop = (e: React.DragEvent) => {
-    pushToHistory(data);
     e.preventDefault();
     const type = e.dataTransfer.getData('type');
     const content = e.dataTransfer.getData('content');
@@ -812,34 +917,31 @@ export default function App() {
       fontWeight: type === 'text' ? 'bold' : undefined,
     };
 
-    setData({
-      ...data,
-      floatingElements: [...(data.floatingElements || []), newEl]
-    });
+    updateReportData(prev => ({
+      ...prev,
+      floatingElements: [...(prev.floatingElements || []), newEl]
+    }), true);
     handleSelectElement(newEl.id);
   };
 
   const updateElement = (id: string, updates: Partial<FloatingElement>) => {
-    // Avoid spamming history on drag/resize by only pushing if it's a "meaningful" change
-    // For simplicity here, we push. In a real app we might debounce history pushes.
-    const copy = [...(data.floatingElements || [])];
-    const idx = copy.findIndex(e => e.id === id);
-    if (idx !== -1) {
-      if (Object.keys(updates).some(k => !['top', 'left', 'width', 'height'].includes(k))) {
-        pushToHistory(data);
+    const isLayoutChange = Object.keys(updates).every(k => ['top', 'left', 'width', 'height'].includes(k));
+    updateReportData(prev => {
+      const copy = [...(prev.floatingElements || [])];
+      const idx = copy.findIndex(e => e.id === id);
+      if (idx !== -1) {
+        copy[idx] = { ...copy[idx], ...updates };
       }
-      copy[idx] = { ...copy[idx], ...updates };
-      setData({ ...data, floatingElements: copy });
-    }
+      return { ...prev, floatingElements: copy };
+    }, !isLayoutChange);
   };
 
   const handleDeleteElement = () => {
     if (!selectedElementId) return;
-    pushToHistory(data);
-    setData({
-      ...data,
-      floatingElements: (data.floatingElements || []).filter(e => e.id !== selectedElementId)
-    });
+    updateReportData(prev => ({
+      ...prev,
+      floatingElements: (prev.floatingElements || []).filter(e => e.id !== selectedElementId)
+    }), true);
     handleSelectElement(null);
   };
 
@@ -955,10 +1057,11 @@ export default function App() {
   const handleCreateNew = (pageSize: 'A1' | 'A2' | 'A3' | 'A4' | 'A5' = 'A4', orientation: 'portrait' | 'landscape' = 'portrait') => {
     setIsViewerMode(false);
     setData({
-      ...MOCK_FULL_DATA,
+      ...INITIAL_EMPTY_DATA,
       pageSize,
       orientation,
-      reportTitle: "Untitled Report"
+      reportTitle: "Untitled Report",
+      sections: [{ id: `sec-${Date.now()}`, type: 'cover' }]
     });
     setReportId(null);
     setView('editor');
@@ -1354,13 +1457,13 @@ export default function App() {
 
               <div className="grid grid-cols-1 gap-3">
                  <button 
-                  onClick={() => setData({ ...data, orientation: data.orientation === 'portrait' ? 'landscape' : 'portrait' })}
+                  onClick={() => updateReportData(prev => ({ ...prev, orientation: prev.orientation === 'portrait' ? 'landscape' : 'portrait' }))}
                   className="h-12 bg-stone-800 text-stone-300 rounded-xl text-[9px] font-black uppercase hover:bg-stone-700 hover:text-white transition-all flex items-center justify-center gap-2"
                  >
                     <Grid3X3 size={14}/> Switch Layout
                  </button>
                  <button 
-                  onClick={() => setData({ ...data, pageSize: 'A4' })}
+                  onClick={() => updateReportData({ pageSize: 'A4' })}
                   className={cn(
                     "h-12 rounded-xl text-[9px] font-black uppercase transition-all flex items-center justify-center gap-2",
                     data.pageSize === 'A4' ? "bg-[#E8B931] text-stone-900" : "bg-stone-800 text-stone-300 hover:bg-stone-700"
@@ -1378,13 +1481,13 @@ export default function App() {
               <div className="space-y-2">
                  <label className="text-[9px] uppercase font-bold text-stone-500">Theme Color</label>
                  <div className="h-12 rounded-xl border border-stone-800 relative overflow-hidden">
-                    <input type="color" value={data.themeColor} onChange={e => setData({...data, themeColor: e.target.value})} className="absolute inset-[-10px] w-[200%] h-[200%] cursor-pointer" />
+                    <input type="color" value={data.themeColor} onChange={e => updateReportData({ themeColor: e.target.value })} className="absolute inset-[-10px] w-[200%] h-[200%] cursor-pointer" />
                  </div>
               </div>
               <div className="space-y-2">
                  <label className="text-[9px] uppercase font-bold text-stone-500">Accent Color</label>
                  <div className="h-12 rounded-xl border border-stone-800 relative overflow-hidden">
-                    <input type="color" value={data.accentColor} onChange={e => setData({...data, accentColor: e.target.value})} className="absolute inset-[-10px] w-[200%] h-[200%] cursor-pointer" />
+                    <input type="color" value={data.accentColor} onChange={e => updateReportData({ accentColor: e.target.value })} className="absolute inset-[-10px] w-[200%] h-[200%] cursor-pointer" />
                  </div>
               </div>
            </div>
@@ -1536,7 +1639,7 @@ export default function App() {
 
   const addSection = (type: any) => {
     const newSection = { id: `sec-${Date.now()}`, type };
-    setData({ ...data, sections: [...(data.sections || []), newSection] });
+    updateReportData(prev => ({ ...prev, sections: [...(prev.sections || []), newSection] }));
   };
 
   const duplicateSection = (id: string) => {
@@ -1544,9 +1647,11 @@ export default function App() {
     if (sectionIndex === undefined || sectionIndex === -1) return;
     const section = data.sections![sectionIndex];
     const newSection = { ...section, id: `sec-${Date.now()}` };
-    const newSections = [...(data.sections || [])];
-    newSections.splice(sectionIndex + 1, 0, newSection);
-    setData({ ...data, sections: newSections });
+    updateReportData(prev => {
+      const newSections = [...(prev.sections || [])];
+      newSections.splice(sectionIndex + 1, 0, newSection);
+      return { ...prev, sections: newSections };
+    });
   };
 
   useEffect(() => {
@@ -1559,17 +1664,19 @@ export default function App() {
   }, [activeSectionId]);
 
   const removeSection = (id: string) => {
-    setData({ ...data, sections: data.sections?.filter(s => s.id !== id) });
+    updateReportData(prev => ({ ...prev, sections: prev.sections?.filter(s => s.id !== id) }));
   };
 
   const moveSection = (id: string, direction: 'up' | 'down') => {
-    const index = data.sections?.findIndex(s => s.id === id);
-    if (index === undefined || index === -1) return;
-    const newSections = [...(data.sections || [])];
-    const newIndex = direction === 'up' ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= newSections.length) return;
-    [newSections[index], newSections[newIndex]] = [newSections[newIndex], newSections[index]];
-    setData({ ...data, sections: newSections });
+    updateReportData(prev => {
+      const index = prev.sections?.findIndex(s => s.id === id);
+      if (index === undefined || index === -1) return prev;
+      const newSections = [...(prev.sections || [])];
+      const newIndex = direction === 'up' ? index - 1 : index + 1;
+      if (newIndex < 0 || newIndex >= newSections.length) return prev;
+      [newSections[index], newSections[newIndex]] = [newSections[newIndex], newSections[index]];
+      return { ...prev, sections: newSections };
+    });
   };
 
   const renderSection = (section: { id: string, type: string, bgImage?: string }, index: number) => {
@@ -1699,14 +1806,14 @@ export default function App() {
                      <p className="text-xl md:text-2xl font-black text-stone-800 opacity-60 uppercase tracking-widest">
                        <EditableText 
                          value={data.campaignName || "Campaign Name"} 
-                         onChange={(v) => setData({ ...data, campaignName: v })} 
+                         onChange={(v) => updateReportData({ campaignName: v })} 
                          isViewer={isViewerMode} 
                        />
                      </p>
                      <h2 className="text-5xl md:text-7xl font-black text-stone-950 tracking-tighter uppercase leading-tight">
                        <EditableText 
                          value={data.goalsTitle || "Email Marketing Report"} 
-                         onChange={(v) => setData({ ...data, goalsTitle: v })} 
+                         onChange={(v) => updateReportData({ goalsTitle: v })} 
                          isViewer={isViewerMode} 
                        />
                      </h2>
@@ -1716,7 +1823,7 @@ export default function App() {
                      <div className="min-w-0">
                         <p className="text-[10px] font-black uppercase text-slate-400">Date Period</p>
                          <p className="text-lg md:text-xl font-black truncate">
-                           <EditableText value={data.datePeriod} onChange={(v) => setData({ ...data, datePeriod: v })} isViewer={isViewerMode} />
+                           <EditableText value={data.datePeriod} onChange={(v) => updateReportData({ datePeriod: v })} isViewer={isViewerMode} />
                          </p>
                         <p className="text-xs font-bold text-slate-400">Duration: 30 days</p>
                      </div>
@@ -1737,13 +1844,13 @@ export default function App() {
                         <div className="flex justify-between items-center bg-slate-50 p-6 rounded-3xl gap-4">
                            <div className="flex items-center gap-4 text-stone-500 font-bold truncate flex-shrink-0"><Users/> Contact Count</div>
                            <span className="text-2xl md:text-3xl font-black text-stone-950 truncate">
-                             <EditableNumber value={data.listContacts} onChange={(v) => setData({ ...data, listContacts: v })} isViewer={isViewerMode} />
+                             <EditableNumber value={data.listContacts} onChange={(v) => updateReportData({ listContacts: v })} isViewer={isViewerMode} />
                            </span>
                         </div>
                         <div className="flex justify-between items-center bg-slate-50 p-6 rounded-3xl gap-4">
                            <div className="flex items-center gap-4 text-stone-500 font-bold truncate flex-shrink-0"><Briefcase/> Deal Count</div>
                            <span className="text-2xl md:text-3xl font-black text-stone-950 truncate">
-                             <EditableNumber value={data.listDeals} onChange={(v) => setData({ ...data, listDeals: v })} isViewer={isViewerMode} />
+                             <EditableNumber value={data.listDeals} onChange={(v) => updateReportData({ listDeals: v })} isViewer={isViewerMode} />
                            </span>
                         </div>
                      </div>
@@ -1751,7 +1858,7 @@ export default function App() {
                   <BentoCard className="flex flex-col min-h-[300px] overflow-hidden">
                      <h3 className="text-xl font-black uppercase mb-8 border-b border-slate-50 pb-4 text-red-500">Summary</h3>
                      <div className="text-stone-500 text-sm leading-loose font-medium flex-1 overflow-y-auto">
-                       <EditableTextArea value={data.summary} onChange={(v) => setData({ ...data, summary: v })} isViewer={isViewerMode} className="h-full" />
+                       <EditableTextArea value={data.summary} onChange={(v) => updateReportData({ summary: v })} isViewer={isViewerMode} className="h-full" />
                      </div>
                   </BentoCard>
                   <BentoCard className="overflow-hidden">
@@ -2713,7 +2820,119 @@ export default function App() {
       {!isViewerMode && (
         <header className="h-[52px] bg-stone-900 border-b border-white/5 flex items-center justify-between px-4 z-[110] text-sm text-white/80 shrink-0">
           <div className="flex items-center gap-4">
-            <button className="hover:bg-white/10 px-2 py-1 rounded transition-colors font-medium">File</button>
+            <div className="relative" ref={fileMenuRef}>
+              <button 
+                onClick={() => setIsFileMenuOpen(!isFileMenuOpen)}
+                className={cn(
+                  "px-2 py-1 rounded transition-colors font-medium relative z-50",
+                  isFileMenuOpen ? "bg-white/10 text-white" : "hover:bg-white/10"
+                )}
+              >
+                File
+              </button>
+              
+              <AnimatePresence>
+                {isFileMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 5 }}
+                    className="absolute top-full left-0 mt-2 w-72 bg-[#1e2329] border border-white/10 rounded-lg shadow-2xl py-2 z-[200] text-sm overflow-hidden"
+                  >
+                    {/* Header info */}
+                    <div className="px-4 py-2 border-b border-white/5 opacity-40 text-[10px] font-medium tracking-tight">
+                      {data.pageSize} • By {user?.email?.split('@')[0] || 'Ahmad Raza'} • 21cm × 29.7cm
+                    </div>
+                    
+                    <button onClick={() => { handleCreateNew(); setIsFileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-white/10 text-white transition-colors text-left">
+                      <PlusSquare size={16} className="text-white/70" />
+                      <span>Create new design</span>
+                    </button>
+                    
+                    <button onClick={() => { setIsSidebarOpen(true); setSidebarTab('uploads'); setIsFileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-white/10 text-white transition-colors text-left">
+                      <UploadCloud size={16} className="text-white/70" />
+                      <span>Upload files</span>
+                    </button>
+
+                    <div className="my-1 border-b border-white/5" />
+                    
+                    <button className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/10 text-white transition-colors group text-left">
+                      <div className="flex items-center gap-3">
+                        <Settings size={16} className="text-white/70" />
+                        <span>Settings</span>
+                      </div>
+                      <ChevronRight size={14} className="opacity-40 group-hover:opacity-100" />
+                    </button>
+                    
+                    <button className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/10 text-white transition-colors group text-left">
+                      <div className="flex items-center gap-3">
+                        <Accessibility size={16} className="text-white/70" />
+                        <span>Accessibility</span>
+                      </div>
+                      <ChevronRight size={14} className="opacity-40 group-hover:opacity-100" />
+                    </button>
+
+                    <div className="my-1 border-b border-white/5" />
+
+                    <div className="w-full flex items-center justify-between px-4 py-2 hover:bg-white/10 text-white transition-colors">
+                      <div className="flex items-center gap-3">
+                        <CloudCheck size={16} className="text-white/70" />
+                        <span>Save</span>
+                      </div>
+                      <span className="text-[10px] opacity-40 italic">All changes saved</span>
+                    </div>
+
+                    <button onClick={() => setIsOfflineMode(!isOfflineMode)} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-white/10 text-white transition-colors text-left">
+                      {isOfflineMode ? <CloudCheck size={16} className="text-emerald-400" /> : <History size={16} className="text-white/70 rotate-180" />}
+                      <span>{isOfflineMode ? "Available offline" : "Make available offline"}</span>
+                    </button>
+
+                    <button className="w-full flex items-center gap-3 px-4 py-2 hover:bg-white/10 text-white transition-colors text-left">
+                      <FolderOpen size={16} className="text-white/70" />
+                      <span>Move</span>
+                    </button>
+
+                    <button onClick={handleMakeCopy} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-white/10 text-white transition-colors text-left">
+                      <Copy size={16} className="text-white/70" />
+                      <span>Make a copy</span>
+                    </button>
+
+                    <button onClick={() => { handleDownloadPDF(); setIsFileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-white/10 text-white transition-colors text-left">
+                      <Download size={16} className="text-white/70" />
+                      <span>Download</span>
+                    </button>
+
+                    <button onClick={() => window.print()} className="w-full flex items-center justify-between px-4 py-2 hover:bg-white/10 text-white transition-colors text-left">
+                      <div className="flex items-center gap-3">
+                        <Printer size={16} className="text-white/70" />
+                        <span>Print</span>
+                      </div>
+                      <div className="bg-white/10 px-1 py-0.5 rounded text-[8px] font-mono opacity-80">⌘P</div>
+                    </button>
+
+                    <button className="w-full flex items-center gap-3 px-4 py-2 hover:bg-white/10 text-white transition-colors text-left">
+                      <History size={16} className="text-white/70" />
+                      <span>Version history</span>
+                    </button>
+
+                    <button onClick={handleTrash} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-red-500/10 text-red-400 transition-colors text-left">
+                      <Trash2 size={16} />
+                      <span>Move to trash</span>
+                    </button>
+
+                    <div className="my-1 border-b border-white/5" />
+
+                    <button className="w-full flex items-center justify-between px-4 py-2 hover:bg-white/10 text-white transition-colors text-left">
+                      <div className="flex items-center gap-3">
+                        <Search size={16} className="text-white/70" />
+                        <span>Find and replace text</span>
+                      </div>
+                      <div className="bg-white/10 px-1 py-0.5 rounded text-[8px] font-mono opacity-80">⌘F</div>
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
             <button className="hover:bg-white/10 px-2 py-1 rounded transition-colors font-medium">Resize</button>
             <div className="h-4 w-[1px] bg-white/10 mx-2" />
             <div className="flex items-center gap-1 hover:bg-white/10 px-2 py-1 rounded cursor-pointer transition-colors">
@@ -2760,7 +2979,7 @@ export default function App() {
           <div className="flex-1 text-center px-4">
             <div className="inline-flex items-center gap-2 hover:bg-white/10 px-3 py-1 rounded transition-colors cursor-text group max-w-[300px]">
               <span className="truncate font-medium text-white/90">
-                <EditableText value={data.reportTitle || 'Untitled Design'} onChange={(v) => setData({...data, reportTitle: v})} isViewer={false} />
+                <EditableText value={data.reportTitle || 'Untitled Design'} onChange={(v) => updateReportData({ reportTitle: v })} isViewer={false} />
               </span>
             </div>
           </div>
@@ -2821,6 +3040,13 @@ export default function App() {
         {!isViewerMode && (
           <aside className="w-[72px] bg-[#0e1217] flex flex-col items-center py-2 z-[100] border-r border-white/5 shrink-0">
             <div className="flex-1 w-full flex flex-col gap-1 items-center">
+              <RailButton 
+                icon={<LayoutDashboard size={22} />} 
+                label="Home" 
+                active={false} 
+                onClick={() => setView('dashboard')} 
+              />
+              <div className="w-8 h-[1px] bg-white/10 my-2" />
               <RailButton 
                 icon={<LayoutTemplate size={22} />} 
                 label="Design" 
