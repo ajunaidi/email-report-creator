@@ -23,7 +23,7 @@ service cloud.firestore {
 
       match /assets/{assetId} {
         allow read: if true;
-        allow write: if isOwner(get(/databases/$(database)/documents/reports/$(reportId)).data.userId);
+        allow write: if isOwner(getAfter(/databases/$(database)/documents/reports/$(reportId)).data.userId);
       }
     }
 

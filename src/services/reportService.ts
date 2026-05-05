@@ -90,14 +90,26 @@ export const saveReport = async (reportId: string | null, data: ReportData) => {
   const imagesToSave: Record<string, string> = {};
   const cleanedData = { ...data };
 
+  // Handle top-level image keys
   IMAGE_KEYS.forEach(key => {
-    const val = cleanedData[key];
+    const val = (cleanedData as any)[key];
     if (val && typeof val === 'string' && val.startsWith('data:image')) {
       imagesToSave[key] = val;
-      // Use a marker so we know it's stored in DB
       (cleanedData as any)[key] = `__DB_ASSET:${key}__`;
     }
   });
+
+  // Handle images in floatingElements
+  if (cleanedData.floatingElements) {
+    cleanedData.floatingElements = cleanedData.floatingElements.map(el => {
+      if (el.type === 'image' && el.content && el.content.startsWith('data:image')) {
+        const assetKey = `fe_img_${el.id}`;
+        imagesToSave[assetKey] = el.content;
+        return { ...el, content: `__DB_ASSET:${assetKey}__` };
+      }
+      return el;
+    });
+  }
 
   const reportData = {
     userId,
@@ -156,7 +168,19 @@ export const getReport = async (reportId: string): Promise<ReportDocument | null
         const key = assetDoc.id;
         const assetData = assetDoc.data();
         if (assetData.data) {
-          (reportDoc.data as any)[key] = assetData.data;
+          if (key.startsWith('fe_img_')) {
+            const elId = key.replace('fe_img_', '');
+            if (reportDoc.data.floatingElements) {
+              reportDoc.data.floatingElements = reportDoc.data.floatingElements.map(el => {
+                if (el.id === elId) {
+                  return { ...el, content: assetData.data };
+                }
+                return el;
+              });
+            }
+          } else {
+            (reportDoc.data as any)[key] = assetData.data;
+          }
         }
       });
 

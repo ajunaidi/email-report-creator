@@ -160,14 +160,22 @@ function EditableNumber({ value, onChange, className, prefix = '', suffix = '', 
 
 function ClickableImage({ src, onUpload, className, isViewer }: { src?: string, onUpload: (url: string) => void, className?: string, isViewer?: boolean }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [localLoading, setLocalLoading] = useState(false);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setLocalLoading(true);
       const reader = new FileReader();
       reader.onloadend = async () => {
-        const compressed = await compressImage(reader.result as string, 800, 800, 0.6);
-        onUpload(compressed);
+        try {
+          const compressed = await compressImage(reader.result as string, 800, 800, 0.6);
+          onUpload(compressed);
+        } catch (err) {
+          console.error("Compression failed", err);
+        } finally {
+          setLocalLoading(false);
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -179,21 +187,28 @@ function ClickableImage({ src, onUpload, className, isViewer }: { src?: string, 
 
   return (
     <div 
-      onClick={() => fileInputRef.current?.click()} 
+      onClick={() => !localLoading && fileInputRef.current?.click()} 
       className={cn("relative group cursor-pointer overflow-hidden", className)}
     >
-      {src ? (
+      {localLoading ? (
+        <div className="w-full h-full bg-stone-50 flex flex-col items-center justify-center gap-2">
+          <Loader2 className="animate-spin text-mustard" size={24} />
+          <span className="text-[8px] font-black uppercase text-stone-400">Processing...</span>
+        </div>
+      ) : src ? (
         <img src={src} className="w-full h-full object-contain" alt="" />
       ) : (
         <div className="w-full h-full bg-slate-100 flex items-center justify-center">
           <Plus className="text-slate-400 group-hover:text-[#E8B931] group-hover:scale-125 transition-all" />
         </div>
       )}
-      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-        <label className="bg-white text-black px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest pointer-events-none shadow-xl">
-          Upload Image
-        </label>
-      </div>
+      {!localLoading && (
+        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+          <label className="bg-white text-black px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest pointer-events-none shadow-xl">
+            {src ? "Replace Image" : "Upload Image"}
+          </label>
+        </div>
+      )}
       <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFile} />
     </div>
   );
@@ -279,6 +294,7 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (isViewer) return;
+    e.stopPropagation();
     onSelect();
     setIsDragging(true);
     setStartPos({ x: e.clientX, y: e.clientY });
@@ -331,7 +347,7 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
   return (
     <div 
       className={cn(
-        "absolute cursor-move select-none group/floating",
+        "absolute cursor-move select-none group/floating pointer-events-auto",
         (isDragging || isSelected) && "z-50 ring-2 ring-[#E8B931] ring-offset-2",
         isSelected && "z-50"
       )}
@@ -554,10 +570,12 @@ export default function App() {
   const [isSearchingPhotos, setIsSearchingPhotos] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<{ id: string, url: string }[]>([]);
 
+  const [isUploading, setIsUploading] = useState(false);
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     
+    setIsUploading(true);
     try {
       const base64 = await fileToBase64(file);
       const compressed = await compressImage(base64);
@@ -565,6 +583,8 @@ export default function App() {
       setUploadedFiles(prev => [newFile, ...prev]);
     } catch (err) {
       console.error('File upload failed:', err);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -802,6 +822,7 @@ export default function App() {
   };
 
   const handleCreateNew = (pageSize: 'A1' | 'A2' | 'A3' | 'A4' | 'A5' = 'A4', orientation: 'portrait' | 'landscape' = 'portrait') => {
+    setIsViewerMode(false);
     setData({
       ...MOCK_FULL_DATA,
       pageSize,
@@ -813,6 +834,7 @@ export default function App() {
   };
 
   const handleSelectReport = (id: string) => {
+    setIsViewerMode(false);
     setReportId(id);
     setView('editor');
     loadReport(id);
@@ -1120,8 +1142,17 @@ export default function App() {
          <h3 className="text-sm font-black uppercase text-stone-900 mb-2">Upload Files</h3>
          <p className="text-[10px] text-stone-500 font-medium text-center mb-6 px-4">Upload images to use them in your designs.</p>
          <label className="px-6 h-12 bg-stone-900 text-white rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all cursor-pointer">
-            Select Files
-            <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+            {isUploading ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                Select Files
+                <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+              </>
+            )}
          </label>
       </div>
 
@@ -2601,6 +2632,31 @@ export default function App() {
       )}
 
       <div className="flex-1 flex overflow-hidden">
+        {/* Loading Overlay */}
+        <AnimatePresence>
+          {(isLoading || isSaving) && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[1000] bg-stone-900/60 backdrop-blur-md flex flex-col items-center justify-center text-white"
+            >
+              <div className="relative">
+                <Loader2 className="animate-spin text-mustard" size={64} strokeWidth={1} />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-8 h-8 bg-white rounded-lg rotate-45 animate-pulse" />
+                </div>
+              </div>
+              <h2 className="mt-8 text-2xl font-black tracking-tighter leading-none italic uppercase">
+                {isLoading ? "Fetching Design..." : "Saving Masterpiece..."}
+              </h2>
+              <p className="mt-4 text-[10px] font-black tracking-[0.3em] text-mustard uppercase opacity-80">
+                {loadingMessage || "Syncing with Cloud Core"}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Canva Left Rail */}
         {!isViewerMode && (
           <aside className="w-[72px] bg-[#0e1217] flex flex-col items-center py-2 z-[100] border-r border-white/5 shrink-0">
@@ -2763,7 +2819,7 @@ export default function App() {
               >
                 {/* Floating Elements Layer */}
                 <div className="absolute inset-0 pointer-events-none z-[50]">
-                  <div className="relative w-full h-full pointer-events-auto">
+                  <div className="relative w-full h-full pointer-events-none">
                     {(data.floatingElements || []).map((el) => (
                       <FloatingElementComponent 
                         key={el.id} 
