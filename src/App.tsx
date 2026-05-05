@@ -8,8 +8,11 @@ import {
   BarChart3, Users, Mail, TrendingUp, MousePointerClick, 
   LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image, Type, Maximize2, FileText, Info,
   Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash, PieChart as PieChartIcon, ChevronUp, ChevronDown, LayoutDashboard, Chrome,
-  Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile, Square, Minus, ArrowRight
+  Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile, Square, Minus, ArrowRight, Layers,
+  ChevronRight,
+  Monitor
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { cn } from './lib/utils';
@@ -436,17 +439,24 @@ export default function App() {
   const [loadingMessage, setLoadingMessage] = useState('Loading...');
   const [copySuccess, setCopySuccess] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [sidebarTab, setSidebarTab] = useState<'design' | 'elements' | 'uploads' | 'pages' | 'export' | 'inspector'>('design');
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
 
   const handleSelectElement = (id: string | null) => {
     setSelectedElementId(id);
-    if (id) setIsSidebarOpen(true);
+    if (id) {
+      setIsSidebarOpen(true);
+      setSidebarTab('inspector');
+    }
   };
 
   const handleSelection = (sectionId: string | null) => {
     setActiveSectionId(sectionId);
-    if (sectionId) setIsSidebarOpen(true);
+    if (sectionId) {
+       setIsSidebarOpen(true);
+       setSidebarTab('pages');
+    }
   };
   const [isViewerMode, setIsViewerMode] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
@@ -1472,11 +1482,11 @@ export default function App() {
 
       // Special style injection for html2canvas to avoid oklab/oklch errors
       const commonOnClone = (clonedDoc: Document) => {
+        const win = clonedDoc.defaultView || window;
         const colorRegex = /(oklch|oklab|color-mix)\((?:[^()]+|\([^()]*\))+\)/g;
         const colorFallback = '#78716c';
-        const win = clonedDoc.defaultView || window;
 
-        // 1. First, override getComputedStyle to intercept oklch before html2canvas sees it
+        // 1. Force override getComputedStyle to intercept oklch
         const originalGetComputedStyle = win.getComputedStyle;
         win.getComputedStyle = function(elt: Element, pseudoElt?: string | null) {
           const style = originalGetComputedStyle.call(win, elt, pseudoElt);
@@ -1509,11 +1519,10 @@ export default function App() {
             propsToFix.forEach(prop => {
               const val = computed[prop as any];
               if (typeof val === 'string' && (val.includes('oklch') || val.includes('oklab') || val.includes('color-mix'))) {
-                el.style[prop as any] = colorFallback;
+                el.style.setProperty(prop, colorFallback, 'important');
               }
             });
 
-            // Also check inline style strings
             const inline = el.getAttribute('style');
             if (inline && (inline.includes('oklch') || inline.includes('oklab') || inline.includes('color-mix'))) {
               el.style.cssText = inline.replace(colorRegex, colorFallback);
@@ -1529,24 +1538,13 @@ export default function App() {
             transition: none !important; 
             animation: none !important; 
             color-scheme: light !important;
-            text-rendering: optimizeLegibility !important;
+            text-rendering: auto !important;
           }
           html { font-size: 16px !important; }
           :root {
-            --color-stone-50: #fafaf9 !important;
-            --color-stone-100: #f5f5f4 !important;
-            --color-stone-200: #e7e5e4 !important;
-            --color-stone-300: #d6d3d1 !important;
-            --color-stone-400: #a8a29e !important;
-            --color-stone-500: #78716c !important;
-            --color-stone-600: #57534e !important;
-            --color-stone-700: #44403c !important;
-            --color-stone-800: #292524 !important;
-            --color-stone-900: #1c1917 !important;
             --color-stone-950: #0c0a09 !important;
+            --color-stone-900: #1c1917 !important;
             --color-mustard: #e9b949 !important;
-            --color-cream: #fffdf5 !important;
-            --color-cream-dark: #f5f2e8 !important;
           }
           body {
             background-color: ${data.themeColor} !important;
@@ -1557,85 +1555,75 @@ export default function App() {
           }
           #report-preview-area {
             background-color: ${data.themeColor} !important;
-            width: 100% !important;
+            width: 1200px !important;
             display: block !important;
             overflow: visible !important;
             position: static !important;
+            margin: 0 auto !important;
           }
           .print\\:break-after-page {
+            width: 1200px !important;
             box-shadow: none !important;
             margin-bottom: 0 !important;
             page-break-after: always !important;
             break-after: page !important;
             background-color: ${data.themeColor} !important;
           }
-          .absolute.-top-12 { display: none !important; }
-          .cursor-nwse-resize { display: none !important; }
+          .absolute.-top-12, .cursor-nwse-resize, .group\\/section .absolute { display: none !important; }
           .pointer-events-none { pointer-events: auto !important; }
           svg { overflow: visible !important; }
         `;
         clonedDoc.head.appendChild(style);
       };
 
+      const captureOptions = {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: data.themeColor,
+        logging: false,
+        imageTimeout: 0,
+        onclone: commonOnClone,
+        removeContainer: true
+      };
+
       if (sections.length === 0) {
         // Fallback to single page
-        const canvas = await html2canvas(previewArea, {
-          scale: 3, // Higher scale for better quality
-          useCORS: true,
-          backgroundColor: data.themeColor,
-          logging: true,
-          imageTimeout: 0,
-          onclone: commonOnClone,
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: previewArea.scrollWidth,
-          windowHeight: previewArea.scrollHeight
-        });
-        const imgData = canvas.toDataURL('image/jpeg', 1.0);
+        const canvas = await html2canvas(previewArea, captureOptions);
+        const imgData = canvas.toDataURL('image/jpeg', 0.9);
+        const w = previewArea.offsetWidth;
+        const h = previewArea.offsetHeight;
+
         pdf = new jsPDF({ 
-          orientation: canvas.width > canvas.height ? 'l' : 'p', 
+          orientation: w > h ? 'l' : 'p', 
           unit: 'px', 
-          format: [canvas.width, canvas.height],
-          hotfixes: ["px_scaling"]
+          format: [w, h]
         });
-        pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+        pdf.addImage(imgData, 'JPEG', 0, 0, w, h);
       } else {
         for (let i = 0; i < sections.length; i++) {
           const section = sections[i] as HTMLElement;
-          const canvas = await html2canvas(section, {
-            scale: 3,
-            useCORS: true,
-            backgroundColor: data.themeColor,
-            logging: true,
-            imageTimeout: 0,
-            onclone: commonOnClone,
-            scrollX: 0,
-            scrollY: 0,
-            windowWidth: section.scrollWidth,
-            windowHeight: section.scrollHeight
-          });
-
-          const imgData = canvas.toDataURL('image/jpeg', 1.0);
-          const pageWidth = canvas.width;
-          const pageHeight = canvas.height;
+          const canvas = await html2canvas(section, captureOptions);
+          const imgData = canvas.toDataURL('image/jpeg', 0.9);
+          const w = section.offsetWidth;
+          const h = section.offsetHeight;
 
           if (!pdf) {
             pdf = new jsPDF({
-              orientation: pageWidth > pageHeight ? 'l' : 'p',
+              orientation: w > h ? 'l' : 'p',
               unit: 'px',
-              format: [pageWidth, pageHeight],
-              hotfixes: ["px_scaling"]
+              format: [w, h]
             });
           } else {
-            pdf.addPage([pageWidth, pageHeight], pageWidth > pageHeight ? 'l' : 'p');
+            pdf.addPage([w, h], w > h ? 'l' : 'p');
           }
 
-          pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+          pdf.addImage(imgData, 'JPEG', 0, 0, w, h);
         }
       }
 
       if (pdf) {
-        pdf.save(`Report_${data.reportTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`);
+        const title = (data.reportTitle || 'Report').replace(/\s+/g, '_');
+        pdf.save(`${title}_${Date.now()}.pdf`);
       }
     } catch (err) {
       console.error("PDF generation failed:", err);
