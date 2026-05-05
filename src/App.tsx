@@ -541,6 +541,23 @@ function ContextToolbar({ selectedElementId, elements, updateEl, deleteEl, data 
          </div>
       </div>
 
+      <div className="flex items-center gap-1 border-r border-stone-100 pr-2">
+        <button 
+          onClick={() => updateEl(el.id, { zIndex: (el.zIndex || 0) + 1 })}
+          className="p-2 hover:bg-stone-100 rounded-lg text-stone-500 transition-colors"
+          title="Bring Forward"
+        >
+          <ChevronUp size={14} />
+        </button>
+        <button 
+          onClick={() => updateEl(el.id, { zIndex: Math.max(0, (el.zIndex || 0) - 1) })}
+          className="p-2 hover:bg-stone-100 rounded-lg text-stone-500 transition-colors"
+          title="Send Backward"
+        >
+          <ChevronDown size={14} />
+        </button>
+      </div>
+
       <button 
         onClick={deleteEl}
         className="p-2 hover:bg-red-50 rounded-lg text-stone-400 hover:text-red-500 transition-colors"
@@ -553,6 +570,9 @@ function ContextToolbar({ selectedElementId, elements, updateEl, deleteEl, data 
 
 export default function App() {
   const [data, setData] = useState<ReportData>(MOCK_FULL_DATA);
+  const [isViewerMode, setIsViewerMode] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [view, setView] = useState<'auth' | 'dashboard' | 'editor'>('auth');
   const [reportId, setReportId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -640,7 +660,114 @@ export default function App() {
     }
   }, [elementsSubTab]);
 
+  const [history, setHistory] = useState<ReportData[]>([]);
+  const [redoStack, setRedoStack] = useState<ReportData[]>([]);
+  const [clipboard, setClipboard] = useState<FloatingElement | null>(null);
+
+  const pushToHistory = useCallback((newData: ReportData) => {
+    setHistory(prev => [...prev.slice(-49), data]); // Keep last 50 states
+    setRedoStack([]);
+  }, [data]);
+
+  const undo = useCallback(() => {
+    if (history.length === 0) return;
+    const previous = history[history.length - 1];
+    setRedoStack(prev => [data, ...prev]);
+    setHistory(prev => prev.slice(0, -1));
+    setData(previous);
+  }, [history, data]);
+
+  const redo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[0];
+    setHistory(prev => [...prev, data]);
+    setRedoStack(prev => prev.slice(1));
+    setData(next);
+  }, [redoStack, data]);
+
+  const copyElement = useCallback(() => {
+    const el = data.floatingElements?.find(e => e.id === selectedElementId);
+    if (el) setClipboard({ ...el });
+  }, [data.floatingElements, selectedElementId]);
+
+  const pasteElement = useCallback(() => {
+    if (!clipboard) return;
+    pushToHistory(data);
+    const newEl = {
+      ...clipboard,
+      id: `fe-${Date.now()}`,
+      top: clipboard.top + 20,
+      left: clipboard.left + 20,
+      zIndex: (data.floatingElements?.length || 0) + 1
+    };
+    setData(prev => ({
+      ...prev,
+      floatingElements: [...(prev.floatingElements || []), newEl]
+    }));
+    setSelectedElementId(newEl.id);
+  }, [clipboard, data, pushToHistory]);
+
+  const duplicateElement = useCallback(() => {
+    const el = data.floatingElements?.find(e => e.id === selectedElementId);
+    if (!el) return;
+    pushToHistory(data);
+    const newEl = {
+      ...el,
+      id: `fe-${Date.now()}`,
+      top: el.top + 20,
+      left: el.left + 20,
+      zIndex: (data.floatingElements?.length || 0) + 1
+    };
+    setData(prev => ({
+      ...prev,
+      floatingElements: [...(prev.floatingElements || []), newEl]
+    }));
+    setSelectedElementId(newEl.id);
+  }, [data.floatingElements, selectedElementId, data, pushToHistory]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (view !== 'editor' || isViewerMode) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key.toLowerCase()) {
+          case 'z':
+            e.preventDefault();
+            if (e.shiftKey) redo();
+            else undo();
+            break;
+          case 'y':
+            e.preventDefault();
+            redo();
+            break;
+          case 'c':
+            e.preventDefault();
+            copyElement();
+            break;
+          case 'v':
+            e.preventDefault();
+            pasteElement();
+            break;
+          case 'd':
+            e.preventDefault();
+            duplicateElement();
+            break;
+        }
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedElementId) {
+          e.preventDefault();
+          handleDeleteElement();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [view, isViewerMode, undo, redo, copyElement, pasteElement, duplicateElement, selectedElementId, data]);
+
   const addElement = (type: 'image' | 'shape' | 'icon' | 'text' | 'chart', content: string) => {
+    pushToHistory(data);
     const newEl: FloatingElement = {
       id: `fe-${Date.now()}`,
       type,
@@ -658,6 +785,7 @@ export default function App() {
   };
 
   const handleDrop = (e: React.DragEvent) => {
+    pushToHistory(data);
     e.preventDefault();
     const type = e.dataTransfer.getData('type');
     const content = e.dataTransfer.getData('content');
@@ -692,9 +820,14 @@ export default function App() {
   };
 
   const updateElement = (id: string, updates: Partial<FloatingElement>) => {
+    // Avoid spamming history on drag/resize by only pushing if it's a "meaningful" change
+    // For simplicity here, we push. In a real app we might debounce history pushes.
     const copy = [...(data.floatingElements || [])];
     const idx = copy.findIndex(e => e.id === id);
     if (idx !== -1) {
+      if (Object.keys(updates).some(k => !['top', 'left', 'width', 'height'].includes(k))) {
+        pushToHistory(data);
+      }
       copy[idx] = { ...copy[idx], ...updates };
       setData({ ...data, floatingElements: copy });
     }
@@ -702,6 +835,7 @@ export default function App() {
 
   const handleDeleteElement = () => {
     if (!selectedElementId) return;
+    pushToHistory(data);
     setData({
       ...data,
       floatingElements: (data.floatingElements || []).filter(e => e.id !== selectedElementId)
@@ -724,9 +858,6 @@ export default function App() {
        setSidebarTab('pages');
     }
   };
-  const [isViewerMode, setIsViewerMode] = useState(false);
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
-  const [view, setView] = useState<'auth' | 'dashboard' | 'editor'>('auth');
 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
@@ -2590,8 +2721,37 @@ export default function App() {
               <ChevronDown size={14} />
             </div>
             <div className="flex items-center gap-4 ml-2">
-              <button className="text-white/40 hover:text-white transition-colors"><Undo2 size={18} /></button>
-              <button className="text-white/40 hover:text-white transition-colors"><Redo2 size={18} /></button>
+              <button 
+                onClick={undo}
+                disabled={history.length === 0}
+                className={cn("transition-colors", history.length === 0 ? "text-white/20 cursor-not-allowed" : "text-white/60 hover:text-white")}
+              >
+                <Undo2 size={18} />
+              </button>
+              <button 
+                onClick={redo}
+                disabled={redoStack.length === 0}
+                className={cn("transition-colors", redoStack.length === 0 ? "text-white/20 cursor-not-allowed" : "text-white/60 hover:text-white")}
+              >
+                <Redo2 size={18} />
+              </button>
+            </div>
+            <div className="flex items-center gap-2 px-2">
+              <button 
+                onClick={() => setZoom(prev => Math.max(0.1, prev - 0.1))}
+                className="w-6 h-6 flex items-center justify-center hover:bg-white/10 rounded transition-colors"
+              >
+                <Minus size={14} />
+              </button>
+              <span className="text-[10px] font-black w-10 text-center tracking-tighter">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button 
+                onClick={() => setZoom(prev => Math.min(3, prev + 0.1))}
+                className="w-6 h-6 flex items-center justify-center hover:bg-white/10 rounded transition-colors"
+              >
+                <Plus size={14} />
+              </button>
             </div>
             <div className="h-4 w-[1px] bg-white/10 mx-2" />
             <CloudCheck size={18} className="text-emerald-400 opacity-80" />
@@ -2958,28 +3118,38 @@ function BentoCard({ children, className, ...props }: { children: React.ReactNod
   );
 }
 
-function MetricRowProgress({ label, val, max, color }: { label: string, val: number, max: number, color: string }) {
+function MetricRowProgress({ label, val, max, color, onChangeLabel, onChangeVal, isViewer }: { label: string, val: number, max: number, color: string, onChangeLabel?: (v: string) => void, onChangeVal?: (v: number) => void, isViewer?: boolean }) {
   return (
     <div>
       <div className="flex justify-between text-xs font-black mb-3">
-        <span className="text-stone-400 uppercase tracking-widest">{label}</span>
-        <span className="text-stone-950 underline decoration-4 decoration-stone-200">{formatNumber(val)} / {formatNumber(max)}</span>
+        <span className="text-stone-400 uppercase tracking-widest truncate max-w-[50%]">
+          {onChangeLabel ? <EditableText value={label} onChange={onChangeLabel} isViewer={isViewer} /> : label}
+        </span>
+        <span className="text-stone-950 underline decoration-4 decoration-stone-200">
+           {onChangeVal ? <EditableNumber value={val} onChange={onChangeVal} isViewer={isViewer} /> : formatNumber(val)} 
+           {" / "} 
+           {formatNumber(max)}
+        </span>
       </div>
       <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${(val / max) * 100}%`, backgroundColor: color }} />
+        <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${(val / (max || 1)) * 100}%`, backgroundColor: color }} />
       </div>
     </div>
   );
 }
 
-function IconMetricRow({ icon, label, val }: { icon: React.ReactNode, label: string, val: number }) {
+function IconMetricRow({ icon, label, val, onChangeLabel, onChangeVal, isViewer }: { icon: React.ReactNode, label: string, val: number, onChangeLabel?: (v: string) => void, onChangeVal?: (v: number) => void, isViewer?: boolean }) {
   return (
     <div className="flex items-center justify-between p-6 bg-slate-50 rounded-[32px] group hover:bg-white hover:shadow-lg transition-all">
-       <div className="flex items-center gap-4 text-stone-500 font-bold">
-          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-stone-400 shadow-sm">{icon}</div>
-          {label}
+       <div className="flex items-center gap-4 text-stone-500 font-bold truncate flex-1 mr-4">
+          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-stone-400 shadow-sm flex-shrink-0">{icon}</div>
+          <div className="truncate">
+            {onChangeLabel ? <EditableText value={label} onChange={onChangeLabel} isViewer={isViewer} /> : label}
+          </div>
        </div>
-       <span className="text-2xl font-black text-stone-950">{formatNumber(val)}</span>
+       <span className="text-2xl font-black text-stone-950 flex-shrink-0">
+          {onChangeVal ? <EditableNumber value={val} onChange={onChangeVal} isViewer={isViewer} /> : formatNumber(val)}
+       </span>
     </div>
   );
 }
