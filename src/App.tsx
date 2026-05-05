@@ -10,7 +10,7 @@ import {
   Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash, PieChart as PieChartIcon, ChevronUp, ChevronDown, LayoutDashboard, Chrome,
   Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile, Square, Minus, ArrowRight, Layers,
   ChevronRight, ChevronLeft, Hash,
-  Monitor
+  Monitor, Redo2, Undo2, CloudCheck, Search, Globe, Box, Grid3X3, Wand2, UploadCloud, FolderHeart, LayoutTemplate
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import html2canvas from 'html2canvas';
@@ -451,18 +451,19 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
 
 export interface ReportDataWithOptional extends ReportData {}
 
-function RailButton({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) {
+function RailButton({ icon, label, active, onClick, className }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, className?: string }) {
   return (
     <button 
       onClick={onClick}
       className={cn(
-        "w-full py-3 flex flex-col items-center justify-center gap-1 transition-all group relative",
-        active ? "text-mustard" : "text-stone-500 hover:text-white"
+        "w-full h-[72px] flex flex-col items-center justify-center gap-1.5 transition-all relative group",
+        active ? "bg-white/10 text-white" : "text-white/40 hover:text-white/80 hover:bg-white/5",
+        className
       )}
     >
-      {active && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-mustard rounded-r-full" />}
-      <div className={cn("transition-transform group-active:scale-90", active && "scale-110")}>{icon}</div>
-      <span className="text-[8px] font-black uppercase tracking-tighter">{label}</span>
+      {active && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white rounded-r-full" />}
+      <div className={cn("transition-transform", active ? "scale-110" : "group-hover:scale-105")}>{icon}</div>
+      <span className="text-[10px] font-bold tracking-tight opacity-100">{label}</span>
     </button>
   );
 }
@@ -541,7 +542,7 @@ export default function App() {
   const [loadingMessage, setLoadingMessage] = useState('Loading...');
   const [copySuccess, setCopySuccess] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [sidebarTab, setSidebarTab] = useState<'design' | 'elements' | 'text' | 'uploads' | 'pages' | 'export' | 'inspector'>('design');
+  const [sidebarTab, setSidebarTab] = useState<'design' | 'elements' | 'text' | 'uploads' | 'pages' | 'export' | 'inspector' | 'brand' | 'tools' | 'apps'>('design');
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -2213,160 +2214,272 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-stone-900 border-t border-stone-800">
-      {/* Left Rail */}
+    <div className="flex h-screen flex-col overflow-hidden bg-stone-100 font-sans selection:bg-mustard/30">
+      {/* Canva Top Navigation */}
       {!isViewerMode && (
-        <aside className="w-20 bg-stone-950 border-r border-stone-800 flex flex-col items-center py-4 z-[100]">
-          <div className="mb-8 w-10 h-10 bg-mustard rounded-xl flex items-center justify-center text-stone-900 shadow-lg shadow-mustard/20">
-            <Mail size={24} strokeWidth={3} />
+        <header className="h-[52px] bg-stone-900 border-b border-white/5 flex items-center justify-between px-4 z-[110] text-sm text-white/80 shrink-0">
+          <div className="flex items-center gap-4">
+            <button className="hover:bg-white/10 px-2 py-1 rounded transition-colors font-medium">File</button>
+            <button className="hover:bg-white/10 px-2 py-1 rounded transition-colors font-medium">Resize</button>
+            <div className="h-4 w-[1px] bg-white/10 mx-2" />
+            <div className="flex items-center gap-1 hover:bg-white/10 px-2 py-1 rounded cursor-pointer transition-colors">
+              <span className="font-bold">Editing</span>
+              <ChevronDown size={14} />
+            </div>
+            <div className="flex items-center gap-4 ml-2">
+              <button className="text-white/40 hover:text-white transition-colors"><Undo2 size={18} /></button>
+              <button className="text-white/40 hover:text-white transition-colors"><Redo2 size={18} /></button>
+            </div>
+            <div className="h-4 w-[1px] bg-white/10 mx-2" />
+            <CloudCheck size={18} className="text-emerald-400 opacity-80" />
           </div>
-          
-          <div className="flex-1 w-full space-y-2">
-            <RailButton icon={<Palette size={20} />} label="Design" active={sidebarTab === 'design'} onClick={() => { setSidebarTab('design'); setIsSidebarOpen(true); }} />
-            <RailButton icon={<LayoutDashboard size={20} />} label="Elements" active={sidebarTab === 'elements'} onClick={() => { setSidebarTab('elements'); setIsSidebarOpen(true); }} />
-            <RailButton icon={<Type size={20} />} label="Text" active={sidebarTab === 'text'} onClick={() => { setSidebarTab('text'); setIsSidebarOpen(true); }} />
-            <RailButton icon={<Copy size={20} />} label="Pages" active={sidebarTab === 'pages'} onClick={() => { setSidebarTab('pages'); setIsSidebarOpen(true); }} />
-            <div className="pt-4 mt-4 border-t border-stone-800">
-              <RailButton icon={<Download size={20} />} label="Export" active={sidebarTab === 'export'} onClick={() => { setSidebarTab('export'); setIsSidebarOpen(true); }} />
+
+          <div className="flex-1 text-center px-4">
+            <div className="inline-flex items-center gap-2 hover:bg-white/10 px-3 py-1 rounded transition-colors cursor-text group max-w-[300px]">
+              <span className="truncate font-medium text-white/90">
+                <EditableText value={data.reportTitle || 'Untitled Design'} onChange={(v) => setData({...data, reportTitle: v})} isViewer={false} />
+              </span>
             </div>
           </div>
 
-          <div className="mt-auto space-y-2 w-full pb-4">
-            {user ? (
-               <button onClick={handleSignOut} className="w-full py-4 flex flex-col items-center justify-center gap-1 text-stone-500 hover:text-red-500 transition-colors group">
-                 <div className="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center border border-white/10 group-hover:border-red-500/30">
-                    <UserIcon size={16} />
-                 </div>
-                 <span className="text-[7px] font-black uppercase tracking-tighter">Exit</span>
-               </button>
-            ) : (
-               <RailButton icon={<LogIn size={20} />} label="In" active={false} onClick={handleSignIn} />
-            )}
-          </div>
-        </aside>
-      )}
-
-      {/* Secondary Panel */}
-      {!isViewerMode && (
-        <motion.aside 
-          initial={false}
-          animate={{ width: isSidebarOpen ? 360 : 0, opacity: isSidebarOpen ? 1 : 0 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="bg-white border-r border-stone-200 overflow-hidden relative shadow-2xl z-[90]"
-        >
-          <div className="w-[360px] h-full flex flex-col">
-            <header className="h-16 px-6 border-b border-stone-100 flex items-center justify-between flex-shrink-0">
-               <h2 className="font-black uppercase tracking-widest text-xs text-stone-900">{sidebarTab}</h2>
-               <button onClick={() => setIsSidebarOpen(false)} className="w-8 h-8 rounded-full hover:bg-stone-50 flex items-center justify-center text-stone-400">
-                 <ChevronLeft size={20} />
-               </button>
-            </header>
-            
-            <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
-              {sidebarTab === 'design' && renderDesignTab()}
-              {sidebarTab === 'elements' && renderElementsTab()}
-              {sidebarTab === 'text' && renderTextTab()}
-              {sidebarTab === 'pages' && renderPagesTab()}
-              {sidebarTab === 'inspector' && renderInspectorTab()}
-              {sidebarTab === 'export' && renderExportTab()}
+          <div className="flex items-center gap-2">
+            <div className="flex -space-x-2 mr-4">
+               <div className="w-8 h-8 rounded-full bg-stone-800 border-2 border-stone-900 flex items-center justify-center font-bold text-xs">M</div>
+               <div className="w-8 h-8 rounded-full bg-mustard border-2 border-stone-900 flex items-center justify-center font-bold text-xs text-stone-900">+</div>
             </div>
+            <button className="h-8 px-4 bg-white/10 hover:bg-white/15 rounded-md flex items-center gap-2 text-xs font-bold transition-colors">
+              <MessageSquare size={14} />
+            </button>
+            <button 
+              onClick={handleGenerateShareLink}
+              className="h-8 px-4 bg-white/10 hover:bg-white/15 rounded-md flex items-center gap-2 text-xs font-bold transition-colors"
+            >
+              <Share2 size={14} />
+              Share
+            </button>
+            <button 
+              onClick={handleDownloadPDF}
+              className="h-8 px-4 bg-[#00c4cc] hover:bg-[#00b4bc] text-white rounded-md flex items-center gap-2 text-xs font-black uppercase tracking-tighter transition-all"
+            >
+              <Download size={14} strokeWidth={3} />
+              Download
+            </button>
           </div>
-        </motion.aside>
+        </header>
       )}
 
-      {/* Workspace */}
-      <main className="flex-1 flex flex-col relative bg-stone-100 overflow-hidden">
-        {/* Workspace Toolbar */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Canva Left Rail */}
         {!isViewerMode && (
-          <header className={`h-16 bg-white border-b border-stone-200 flex items-center justify-between px-6 z-40 shadow-sm transition-all ${!isSidebarOpen && 'pl-12'}`}>
-            <div className="flex items-center gap-4">
-               {!isSidebarOpen && (
-                 <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-stone-50 rounded-lg text-stone-400">
-                   <Menu size={20} />
-                 </button>
+          <aside className="w-[72px] bg-[#0e1217] flex flex-col items-center py-2 z-[100] border-r border-white/5 shrink-0">
+            <div className="flex-1 w-full flex flex-col gap-1 items-center">
+              <RailButton 
+                icon={<LayoutTemplate size={22} />} 
+                label="Design" 
+                active={sidebarTab === 'design'} 
+                onClick={() => { setSidebarTab('design'); setIsSidebarOpen(true); }} 
+              />
+              <RailButton 
+                icon={<Box size={22} />} 
+                label="Elements" 
+                active={sidebarTab === 'elements'} 
+                onClick={() => { setSidebarTab('elements'); setIsSidebarOpen(true); }} 
+              />
+              <RailButton 
+                icon={<Type size={22} />} 
+                label="Text" 
+                active={sidebarTab === 'text'} 
+                onClick={() => { setSidebarTab('text'); setIsSidebarOpen(true); }} 
+              />
+              <RailButton 
+                icon={<Globe size={22} />} 
+                label="Brand" 
+                active={sidebarTab === 'brand'} 
+                onClick={() => { setSidebarTab('brand'); setIsSidebarOpen(true); }} 
+              />
+              <RailButton 
+                icon={<UploadCloud size={22} />} 
+                label="Uploads" 
+                active={sidebarTab === 'uploads'} 
+                onClick={() => { setSidebarTab('uploads'); setIsSidebarOpen(true); }} 
+              />
+              <RailButton 
+                icon={<Wand2 size={22} />} 
+                label="Tools" 
+                active={sidebarTab === 'tools'} 
+                onClick={() => { setSidebarTab('tools'); setIsSidebarOpen(true); }} 
+              />
+              <RailButton 
+                icon={<FolderHeart size={22} />} 
+                label="Projects" 
+                active={sidebarTab === 'pages'} 
+                onClick={() => { setSidebarTab('pages'); setIsSidebarOpen(true); }} 
+              />
+              <RailButton 
+                icon={<Grid3X3 size={22} />} 
+                label="Apps" 
+                active={sidebarTab === 'apps'} 
+                onClick={() => { setSidebarTab('apps'); setIsSidebarOpen(true); }} 
+              />
+            </div>
+            
+            <div className="mt-auto w-full flex flex-col items-center gap-4 pb-4">
+               {user && (
+                 <div className="w-8 h-8 rounded-full bg-mustard flex items-center justify-center text-stone-900 border-2 border-transparent hover:border-white transition-all cursor-pointer">
+                    <UserIcon size={16} strokeWidth={3} />
+                 </div>
                )}
-               <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-stone-100 flex items-center justify-center text-stone-400">
-                    <Hash size={14} />
-                  </div>
-                  <h1 className="text-sm font-black text-stone-900 tracking-tight uppercase truncate max-w-[200px]">
-                    <EditableText value={data.reportTitle || 'Untitled Design'} onChange={(v) => setData({...data, reportTitle: v})} isViewer={false} />
-                  </h1>
-               </div>
             </div>
-
-            <div className="flex items-center gap-1">
-              <div className="flex items-center bg-stone-50 rounded-xl p-1 border border-stone-200 mr-4">
-                <button onClick={() => setZoom(Math.max(0.1, zoom - 0.1))} className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-stone-900"><Minus size={14}/></button>
-                <div className="w-12 text-center text-[10px] font-black text-stone-600">{Math.round(zoom * 100)}%</div>
-                <button onClick={() => setZoom(Math.min(2, zoom + 0.1))} className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-stone-900"><Plus size={14}/></button>
-              </div>
-              <button 
-                onClick={handleDownloadPDF}
-                className="px-4 h-10 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all flex items-center gap-2 shadow-lg shadow-black/10"
-              >
-                <Download size={14} /> Download
-              </button>
-            </div>
-          </header>
+          </aside>
         )}
 
-        {/* Canvas Area */}
-        <div className="flex-1 overflow-auto bg-[#f3f3f3] relative scrollbar-thin p-12 flex flex-col items-center">
-            {/* Property Bar (Canva-like) */}
-            <AnimatePresence>
-               {selectedElementId && (
-                 <motion.div 
-                   initial={{ y: 20, opacity: 0 }}
-                   animate={{ y: 0, opacity: 1 }}
-                   exit={{ y: 20, opacity: 0 }}
-                   className="fixed top-20 left-1/2 -translate-x-1/2 z-[60] bg-white border border-stone-200 shadow-2xl rounded-2xl h-12 flex items-center px-4 gap-4"
-                 >
-                    <PropertyBarContent 
-                      element={(data.floatingElements || []).find(e => e.id === selectedElementId)} 
-                      onUpdate={(updates) => updateElement(selectedElementId, updates)}
-                      onDelete={handleDeleteElement}
-                    />
-                 </motion.div>
-               )}
-            </AnimatePresence>
-
-            {/* Overlay Toolbar when element is selected */}
-            <ContextToolbar 
-               selectedElementId={selectedElementId}
-               elements={data.floatingElements || []}
-               updateEl={updateElement}
-               deleteEl={handleDeleteElement}
-               data={data}
-            />
-
-            <div 
-              ref={reportRef}
-              id="report-preview-area"
-              className="flex flex-col gap-12 origin-top transition-transform shadow-2xl relative"
-              style={{ transform: `scale(${zoom})` }}
-            >
-              {/* Floating Elements Layer */}
-              <div className="absolute inset-0 pointer-events-none z-[50]">
-                <div className="relative w-full h-full pointer-events-auto">
-                   {(data.floatingElements || []).map((el) => (
-                     <FloatingElementComponent 
-                       key={el.id} 
-                       element={el} 
-                       isViewer={isViewerMode}
-                       isSelected={selectedElementId === el.id}
-                       onSelect={() => handleSelectElement(el.id)}
-                       onChange={(updated) => updateElement(el.id, updated)}
-                       onRemove={() => handleDeleteElement()}
-                     />
-                   ))}
-                </div>
-              </div>
+        {/* Secondary Panel */}
+        {!isViewerMode && (
+          <motion.aside 
+            initial={false}
+            animate={{ width: isSidebarOpen ? 360 : 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="bg-white border-r border-stone-200 overflow-hidden relative shadow-2xl z-[90] shrink-0"
+          >
+            <div className="w-[360px] h-full flex flex-col">
+              <header className="h-[72px] px-6 flex items-center justify-between flex-shrink-0">
+                <h2 className="font-extrabold text-lg text-stone-900 capitalize">{sidebarTab}</h2>
+                <button onClick={() => setIsSidebarOpen(false)} className="w-8 h-8 rounded-full hover:bg-stone-50 flex items-center justify-center text-stone-400">
+                  <ChevronLeft size={20} />
+                </button>
+              </header>
               
-              {data.sections.map((section, idx) => renderSection(section, idx))}
+              <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+                <div className="mb-6 relative">
+                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"><Search size={16}/></div>
+                   <input 
+                     type="text" 
+                     placeholder={`Search ${sidebarTab}...`} 
+                     className="w-full h-10 bg-stone-100/50 border border-stone-200 rounded-xl pl-10 pr-4 text-xs font-medium focus:bg-white focus:ring-2 focus:ring-mustard/20 focus:outline-none transition-all" 
+                   />
+                </div>
+                {sidebarTab === 'design' && renderDesignTab()}
+                {sidebarTab === 'elements' && renderElementsTab()}
+                {sidebarTab === 'text' && renderTextTab()}
+                {sidebarTab === 'brand' && (
+                  <div className="flex flex-col items-center justify-center pt-20 text-center px-6">
+                    <div className="w-16 h-16 bg-stone-50 rounded-full flex items-center justify-center text-stone-200 mb-4 text-[#00c4cc]">
+                      <Globe size={32} />
+                    </div>
+                    <h3 className="text-sm font-black uppercase text-stone-900 mb-1">Brand Kit</h3>
+                    <p className="text-[10px] text-stone-500 font-medium leading-relaxed">Centralize your colors, logos, and fonts for consistent designs.</p>
+                  </div>
+                )}
+                {sidebarTab === 'tools' && (
+                   <div className="grid grid-cols-2 gap-3">
+                      <ToolButton icon={<Wand2 size={24}/>} label="Magic Media" onClick={() => {}} />
+                      <ToolButton icon={<Maximize2 size={24}/>} label="Resize" onClick={() => {}} />
+                      <ToolButton icon={<Palette size={24}/>} label="Styles" onClick={() => setSidebarTab('design')} />
+                   </div>
+                )}
+                {sidebarTab === 'apps' && (
+                  <div className="flex flex-col items-center justify-center pt-20 text-center px-6">
+                    <div className="w-16 h-16 bg-stone-50 rounded-full flex items-center justify-center text-stone-200 mb-4">
+                      <Box size={32} />
+                    </div>
+                    <h3 className="text-sm font-black uppercase text-stone-900 mb-1">App Marketplace</h3>
+                    <p className="text-[10px] text-stone-500 font-medium leading-relaxed">Connect to your favorite tools and unlock new features.</p>
+                  </div>
+                )}
+                {sidebarTab === 'pages' && renderPagesTab()}
+                {sidebarTab === 'inspector' && renderInspectorTab()}
+                {sidebarTab === 'export' && renderExportTab()}
+              </div>
             </div>
-        </div>
-      </main>
+          </motion.aside>
+        )}
+
+        {/* Workspace */}
+        <main className="flex-1 flex flex-col relative bg-[#252b33] overflow-hidden">
+          {/* Canvas Area */}
+          <div className="flex-1 overflow-auto relative scrollbar-canva p-12 flex flex-col items-center">
+              {/* Canva Element Toolbar (Floating) */}
+              <AnimatePresence>
+                {selectedElementId && (
+                  <motion.div 
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 20, opacity: 0 }}
+                    className="fixed top-20 left-1/2 -translate-x-1/2 z-[120] bg-white border border-stone-200 shadow-2xl rounded-2xl h-12 flex items-center px-4 gap-4"
+                  >
+                      <PropertyBarContent 
+                        element={(data.floatingElements || []).find(e => e.id === selectedElementId)} 
+                        onUpdate={(updates) => updateElement(selectedElementId, updates)}
+                        onDelete={handleDeleteElement}
+                      />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <div 
+                ref={reportRef}
+                id="report-preview-area"
+                className="flex flex-col gap-12 origin-top transition-transform shadow-2xl ring-1 ring-white/5"
+                style={{ transform: `scale(${zoom})` }}
+              >
+                {/* Floating Elements Layer */}
+                <div className="absolute inset-0 pointer-events-none z-[50]">
+                  <div className="relative w-full h-full pointer-events-auto">
+                    {(data.floatingElements || []).map((el) => (
+                      <FloatingElementComponent 
+                        key={el.id} 
+                        element={el} 
+                        isViewer={isViewerMode}
+                        isSelected={selectedElementId === el.id}
+                        onSelect={() => handleSelectElement(el.id)}
+                        onChange={(updated) => updateElement(el.id, updated)}
+                        onRemove={() => handleDeleteElement()}
+                      />
+                    ))}
+                  </div>
+                </div>
+                
+                {data.sections.map((section, idx) => renderSection(section, idx))}
+              </div>
+          </div>
+
+          {/* Canva Bottom Bar */}
+          {!isViewerMode && (
+            <footer className="h-10 bg-stone-900 border-t border-white/5 flex items-center justify-between px-4 z-[100] text-xs text-white/60 shrink-0">
+               <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 hover:text-white transition-colors cursor-pointer">
+                    <MessageSquare size={14} /> Notes
+                  </div>
+                  <div className="flex items-center gap-2 hover:text-white transition-colors cursor-pointer">
+                    <CalendarIcon size={14} /> Timer
+                  </div>
+               </div>
+
+               <div className="flex items-center gap-4 absolute left-1/2 -translate-x-1/2">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setZoom(Math.max(0.1, zoom - 0.1))} className="hover:text-white"><Minus size={14}/></button>
+                    <input 
+                      type="range" 
+                      min="0.1" max="2" step="0.1" 
+                      value={zoom} 
+                      onChange={(e) => setZoom(parseFloat(e.target.value))}
+                      className="w-24 accent-mustard" 
+                    />
+                    <button onClick={() => setZoom(Math.min(2, zoom + 0.1))} className="hover:text-white"><Plus size={14}/></button>
+                    <span className="w-10 text-center font-bold">{Math.round(zoom * 100)}%</span>
+                  </div>
+               </div>
+
+               <div className="flex items-center gap-4">
+                  <button className="flex items-center gap-1 hover:text-white transition-colors">
+                    <Layers size={14} /> Pages
+                  </button>
+                  <span className="font-bold">{data.sections.length}</span>
+               </div>
+            </footer>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
