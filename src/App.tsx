@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { cn } from './lib/utils';
-import { compressImage } from './lib/imageUtils';
+import { compressImage, fileToBase64 } from './lib/imageUtils';
 import { ReportData, CampaignPerformanceRow, FloatingElement } from './types';
 import { MOCK_FULL_DATA } from './mockData';
 import { ReportHeader } from './components/ReportHeader';
@@ -348,7 +348,7 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
       onMouseDown={handleMouseDown}
     >
       {element.type === 'image' ? (
-        <img src={element.content} className="w-full h-full object-cover shadow-xl" style={{ borderRadius: `${element.borderRadius || 8}px` }} alt="" draggable={false} />
+        <img src={element.content} referrerPolicy="no-referrer" className="w-full h-full object-cover shadow-xl" style={{ borderRadius: `${element.borderRadius || 8}px` }} alt="" draggable={false} />
       ) : element.type === 'icon' ? (
         <div className="w-full h-full flex items-center justify-center pointer-events-none" style={{ color: element.color || '#E8B931' }}>
           {React.createElement(
@@ -381,7 +381,9 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
             textDecoration: element.textDecoration || 'none',
             borderRadius: `${element.borderRadius || 0}px`,
             padding: `${element.padding || 8}px`,
-            backgroundColor: element.borderColor ? element.borderColor : 'transparent'
+            backgroundColor: element.borderColor ? element.borderColor : 'transparent',
+            textShadow: element.textShadow || 'none',
+            WebkitTextStroke: element.outlineWidth ? `${element.outlineWidth}px ${element.outlineColor || '#000'}` : 'none'
           }}
         >
           {element.content}
@@ -546,6 +548,55 @@ export default function App() {
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [elementsSubTab, setElementsSubTab] = useState<'graphics' | 'photos'>('graphics');
+  const [unsplashQuery, setUnsplashQuery] = useState('');
+  const [unsplashResults, setUnsplashResults] = useState<any[]>([]);
+  const [isSearchingPhotos, setIsSearchingPhotos] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<{ id: string, url: string }[]>([]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    try {
+      const base64 = await fileToBase64(file);
+      const compressed = await compressImage(base64);
+      const newFile = { id: `up-${Date.now()}`, url: compressed };
+      setUploadedFiles(prev => [newFile, ...prev]);
+    } catch (err) {
+      console.error('File upload failed:', err);
+    }
+  };
+
+  const fetchUnsplash = async (query: string) => {
+    if (!query) return;
+    setIsSearchingPhotos(true);
+    try {
+      const accessKey = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
+      if (!accessKey) {
+        console.warn('Unsplash Access Key is missing');
+        // Fallback to some random photos if key is missing for demo
+        setUnsplashResults([
+          { id: '1', urls: { small: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400' } },
+          { id: '2', urls: { small: 'https://images.unsplash.com/photo-1557683316-973673baf926?w=400' } },
+          { id: '3', urls: { small: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=400' } },
+          { id: '4', urls: { small: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400' } },
+        ]);
+        return;
+      }
+      const response = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=20`, {
+        headers: {
+          Authorization: `Client-ID ${accessKey}`
+        }
+      });
+      const data = await response.json();
+      setUnsplashResults(data.results || []);
+    } catch (err) {
+      console.error('Error fetching Unsplash photos:', err);
+    } finally {
+      setIsSearchingPhotos(false);
+    }
+  };
 
   const addElement = (type: 'image' | 'shape' | 'icon' | 'text' | 'chart', content: string) => {
     const newEl: FloatingElement = {
@@ -561,6 +612,40 @@ export default function App() {
       color: type === 'text' ? '#000000' : '#E8B931'
     };
     setData({ ...data, floatingElements: [...(data.floatingElements || []), newEl] });
+    handleSelectElement(newEl.id);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const type = e.dataTransfer.getData('type');
+    const content = e.dataTransfer.getData('content');
+    
+    // Get drop position relative to canvas
+    const rect = (document.getElementById('report-preview-area'))?.getBoundingClientRect();
+    if (!rect) return;
+
+    const x = (e.clientX - rect.left) / zoom;
+    const y = (e.clientY - rect.top) / zoom;
+
+    const newEl: FloatingElement = {
+      id: `fe-${Date.now()}`,
+      type: type as any,
+      content: content,
+      top: y - 50,
+      left: x - 50,
+      width: type === 'text' ? 400 : 200,
+      height: type === 'text' ? 100 : 200,
+      zIndex: (data.floatingElements || []).length + 1,
+      opacity: 1,
+      color: type === 'text' ? '#000000' : '#E8B931',
+      fontSize: type === 'text' ? 40 : undefined,
+      fontWeight: type === 'text' ? 'bold' : undefined,
+    };
+
+    setData({
+      ...data,
+      floatingElements: [...(data.floatingElements || []), newEl]
+    });
     handleSelectElement(newEl.id);
   };
 
@@ -671,8 +756,36 @@ export default function App() {
     }
   };
 
-  const handleCreateNew = () => {
-    setData(MOCK_FULL_DATA);
+  const getPageDimensions = (pageSize?: string, orientation?: string) => {
+    const baseWidth = 1200;
+    const ratio = 1.414;
+    const size = pageSize || data.pageSize || 'A4';
+    const orient = orientation || data.orientation || 'portrait';
+    
+    // Scale factor for different A sizes (A4 is baseline 1.0)
+    const scaleMap: Record<string, number> = {
+      'A1': 2.8,
+      'A2': 2.0,
+      'A3': 1.4,
+      'A4': 1.0,
+      'A5': 0.7,
+    };
+    const scale = scaleMap[size] || 1.0;
+    const width = baseWidth * scale;
+
+    if (orient === 'landscape') {
+      return { width: Math.round(width * ratio), height: Math.round(width) };
+    }
+    return { width: Math.round(width), height: Math.round(width * ratio) };
+  };
+
+  const handleCreateNew = (pageSize: 'A1' | 'A2' | 'A3' | 'A4' | 'A5' = 'A4', orientation: 'portrait' | 'landscape' = 'portrait') => {
+    setData({
+      ...MOCK_FULL_DATA,
+      pageSize,
+      orientation,
+      reportTitle: "Untitled Report"
+    });
     setReportId(null);
     setView('editor');
   };
@@ -750,58 +863,151 @@ export default function App() {
   const renderElementsTab = () => (
     <div className="space-y-8">
       <div className="bg-stone-50 p-2 rounded-2xl flex gap-1 border border-stone-100">
-        <button className="flex-1 h-10 bg-white shadow-sm rounded-xl text-[10px] font-black uppercase tracking-tighter text-stone-900 border border-stone-200">Graphics</button>
-        <button className="flex-1 h-10 text-[10px] font-black uppercase tracking-tighter text-stone-400 hover:text-stone-600 transition-colors">Photos</button>
+        <button 
+          onClick={() => setElementsSubTab('graphics')}
+          className={cn(
+            "flex-1 h-10 shadow-sm rounded-xl text-[10px] font-black uppercase tracking-tighter transition-all",
+            elementsSubTab === 'graphics' ? "bg-white text-stone-900 border border-stone-200" : "text-stone-400 hover:text-stone-600"
+          )}
+        >
+          Graphics
+        </button>
+        <button 
+          onClick={() => setElementsSubTab('photos')}
+          className={cn(
+            "flex-1 h-10 shadow-sm rounded-xl text-[10px] font-black uppercase tracking-tighter transition-all",
+            elementsSubTab === 'photos' ? "bg-white text-stone-900 border border-stone-200" : "text-stone-400 hover:text-stone-600"
+          )}
+        >
+          Photos
+        </button>
       </div>
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Quick Shapes</h3>
-          <button className="text-[9px] font-black uppercase text-mustard">See All</button>
-        </div>
-        <div className="grid grid-cols-4 gap-3">
-          {[
-            { id: 'square', icon: <Square size={20}/> },
-            { id: 'circle', icon: <div className="w-5 h-5 rounded-full border-2 border-current"/> },
-            { id: 'solid-circle', icon: <div className="w-5 h-5 rounded-full bg-current"/> },
-            { id: 'triangle', icon: <Triangle size={20}/> },
-          ].map((shape) => (
+      {elementsSubTab === 'graphics' ? (
+        <>
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Quick Shapes</h3>
+              <button className="text-[9px] font-black uppercase text-mustard">See All</button>
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              {[
+                { id: 'square', icon: <Square size={20}/> },
+                { id: 'circle', icon: <div className="w-5 h-5 rounded-full border-2 border-current"/> },
+                { id: 'solid-circle', icon: <div className="w-5 h-5 rounded-full bg-current"/> },
+                { id: 'triangle', icon: <Triangle size={20}/> },
+              ].map((shape) => (
+                <button 
+                  key={shape.id} 
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('type', 'shape');
+                    e.dataTransfer.setData('content', shape.id);
+                  }}
+                  onClick={() => addElement('shape', shape.id)}
+                  className="aspect-square bg-stone-50 rounded-xl flex items-center justify-center text-stone-400 hover:bg-mustard/10 hover:text-mustard hover:scale-110 active:scale-95 transition-all outline-none cursor-grab"
+                >
+                  {shape.icon}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Charts</h3>
+            <div className="grid grid-cols-2 gap-3">
+               <ToolButton icon={<PieChartIcon size={24}/>} label="Pie Chart" onClick={() => addElement('chart', 'pie')} onDragStart={(e) => { e.dataTransfer.setData('type', 'chart'); e.dataTransfer.setData('content', 'pie'); }} />
+               <ToolButton icon={<BarChart3 size={24}/>} label="Bar Chart" onClick={() => addElement('chart', 'bar')} onDragStart={(e) => { e.dataTransfer.setData('type', 'chart'); e.dataTransfer.setData('content', 'bar'); }} />
+               <ToolButton icon={<TrendingUp size={24}/>} label="Line Chart" onClick={() => addElement('chart', 'line-chart')} onDragStart={(e) => { e.dataTransfer.setData('type', 'chart'); e.dataTransfer.setData('content', 'line-chart'); }} />
+               <ToolButton icon={<Maximize2 size={24}/>} label="Grid Layout" onClick={() => {}} />
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Icons</h3>
+            <div className="grid grid-cols-4 gap-3">
+               {[Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile].map((Icon, i) => (
+                 <button 
+                   key={i} 
+                   draggable
+                   onDragStart={(e) => {
+                     e.dataTransfer.setData('type', 'icon');
+                     e.dataTransfer.setData('content', Icon.name.toLowerCase());
+                   }}
+                   onClick={() => addElement('icon', Icon.name.toLowerCase())} 
+                   className="aspect-square bg-stone-50 rounded-xl flex items-center justify-center text-stone-400 hover:text-mustard transition-colors cursor-grab"
+                 >
+                    <Icon size={20} />
+                 </button>
+               ))}
+            </div>
+          </section>
+        </>
+      ) : (
+        <section className="space-y-4">
+          <div className="relative mb-6">
+            <input 
+              type="text" 
+              placeholder="Search Unsplash..."
+              value={unsplashQuery}
+              onChange={(e) => setUnsplashQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && fetchUnsplash(unsplashQuery)}
+              className="w-full h-11 bg-stone-100 border border-stone-200 rounded-2xl px-4 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-mustard/20 transition-all"
+            />
             <button 
-              key={shape.id} 
-              onClick={() => addElement('shape', shape.id)}
-              className="aspect-square bg-stone-50 rounded-xl flex items-center justify-center text-stone-400 hover:bg-mustard/10 hover:text-mustard hover:scale-110 active:scale-95 transition-all outline-none"
+              onClick={() => fetchUnsplash(unsplashQuery)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-stone-400 hover:text-mustard transition-colors"
             >
-              {shape.icon}
+              <Search size={16} />
             </button>
-          ))}
-        </div>
-      </section>
+          </div>
 
-      <section className="space-y-4">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Charts</h3>
-        <div className="grid grid-cols-2 gap-3">
-           <ToolButton icon={<PieChartIcon size={24}/>} label="Pie Chart" onClick={() => addElement('chart', 'pie')} />
-           <ToolButton icon={<BarChart3 size={24}/>} label="Bar Chart" onClick={() => addElement('chart', 'bar')} />
-           <ToolButton icon={<TrendingUp size={24}/>} label="Line Chart" onClick={() => addElement('chart', 'line-chart')} />
-           <ToolButton icon={<Maximize2 size={24}/>} label="Grid Layout" onClick={() => {}} />
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Icons</h3>
-        <div className="grid grid-cols-4 gap-3">
-           {[Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile].map((Icon, i) => (
-             <button key={i} onClick={() => addElement('icon', Icon.name.toLowerCase())} className="aspect-square bg-stone-50 rounded-xl flex items-center justify-center text-stone-400 hover:text-mustard transition-colors">
-                <Icon size={20} />
-             </button>
-           ))}
-        </div>
-      </section>
+          <div className="grid grid-cols-2 gap-3 min-h-[400px]">
+             {isSearchingPhotos ? (
+               <div className="col-span-2 py-20 flex flex-col items-center justify-center text-stone-400 gap-3">
+                  <Loader2 className="animate-spin" size={24} />
+                  <p className="text-[10px] font-black uppercase tracking-widest">Searching Unsplash...</p>
+               </div>
+             ) : unsplashResults.length > 0 ? (
+               unsplashResults.map(photo => (
+                 <button 
+                   key={photo.id}
+                   draggable
+                   onDragStart={(e) => {
+                     e.dataTransfer.setData('type', 'image');
+                     e.dataTransfer.setData('content', photo.urls.regular || photo.urls.small);
+                   }}
+                   onClick={() => addElement('image', photo.urls.regular || photo.urls.small)}
+                   className="aspect-square rounded-xl overflow-hidden group relative bg-stone-100"
+                 >
+                    <img src={photo.urls.small} referrerPolicy="no-referrer" className="w-full h-full object-cover transition-transform group-hover:scale-110" alt="" />
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                       <Plus className="text-white bg-mustard rounded-full p-1" size={24} />
+                    </div>
+                 </button>
+               ))
+             ) : (
+               <div className="col-span-2 py-20 flex flex-col items-center justify-center text-stone-100/50">
+                  <Image className="mb-4" size={48} />
+                  <p className="text-[10px] font-black uppercase tracking-widest max-w-[140px] text-center leading-loose">Search millions of free high-quality photos</p>
+               </div>
+             )}
+          </div>
+        </section>
+      )}
     </div>
   );
 
-  const ToolButton = ({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick: () => void }) => (
-    <button onClick={onClick} className="flex flex-col items-center justify-center gap-2 p-4 bg-stone-50 border border-stone-100 rounded-2xl hover:border-mustard hover:shadow-xl hover:shadow-mustard/5 transition-all active:scale-95 group">
+  const ToolButton = ({ icon, label, onClick, onDragStart }: { icon: React.ReactNode, label: string, onClick: () => void, onDragStart?: (e: React.DragEvent) => void }) => (
+    <button 
+      onClick={onClick} 
+      draggable={!!onDragStart}
+      onDragStart={onDragStart}
+      className={cn(
+        "flex flex-col items-center justify-center gap-2 p-4 bg-stone-50 border border-stone-100 rounded-2xl hover:border-mustard hover:shadow-xl hover:shadow-mustard/5 transition-all active:scale-95 group",
+        onDragStart && "cursor-grab"
+      )}
+    >
        <div className="text-stone-400 group-hover:text-mustard group-hover:scale-110 transition-all">{icon}</div>
        <span className="text-[10px] font-black text-stone-500 uppercase tracking-widest group-hover:text-stone-900">{label}</span>
     </button>
@@ -813,22 +1019,37 @@ export default function App() {
           <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Default Styles</h3>
           <div className="space-y-3">
              <button 
+               draggable
+               onDragStart={(e) => {
+                 e.dataTransfer.setData('type', 'text');
+                 e.dataTransfer.setData('content', 'Heading 1');
+               }}
                onClick={() => addElement('text', 'Heading 1')}
-               className="w-full text-left p-4 bg-stone-50 border border-stone-100 rounded-2xl hover:border-mustard hover:shadow-lg transition-all group"
+               className="w-full text-left p-4 bg-stone-50 border border-stone-100 rounded-2xl hover:border-mustard hover:shadow-lg transition-all group cursor-grab"
              >
                 <div className="text-2xl font-black text-stone-900 group-hover:text-mustard transition-colors">Add a heading</div>
                 <div className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Extra Bold / 120px</div>
              </button>
              <button 
+               draggable
+               onDragStart={(e) => {
+                 e.dataTransfer.setData('type', 'text');
+                 e.dataTransfer.setData('content', 'Subheading');
+               }}
                onClick={() => addElement('text', 'Subheading')}
-               className="w-full text-left p-4 bg-stone-50 border border-stone-100 rounded-2xl hover:border-mustard hover:shadow-lg transition-all group"
+               className="w-full text-left p-4 bg-stone-50 border border-stone-100 rounded-2xl hover:border-mustard hover:shadow-lg transition-all group cursor-grab"
              >
                 <div className="text-lg font-bold text-stone-700 group-hover:text-stone-900 transition-colors">Add a subheading</div>
                 <div className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Bold / 60px</div>
              </button>
              <button 
+               draggable
+               onDragStart={(e) => {
+                 e.dataTransfer.setData('type', 'text');
+                 e.dataTransfer.setData('content', 'Body text');
+               }}
                onClick={() => addElement('text', 'Body text')}
-               className="w-full text-left p-4 bg-stone-50 border border-stone-100 rounded-2xl hover:border-mustard hover:shadow-lg transition-all group"
+               className="w-full text-left p-4 bg-stone-50 border border-stone-100 rounded-2xl hover:border-mustard hover:shadow-lg transition-all group cursor-grab"
              >
                 <div className="text-sm font-medium text-stone-500 group-hover:text-stone-700 transition-colors">Add body text</div>
                 <div className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Medium / 24px</div>
@@ -857,6 +1078,42 @@ export default function App() {
              ))}
           </div>
        </section>
+    </div>
+  );
+
+  const renderUploadsTab = () => (
+    <div className="space-y-8">
+      <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-stone-100 rounded-[32px] bg-stone-50 hover:bg-stone-100 transition-all group">
+         <div className="w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center text-stone-300 group-hover:text-mustard transition-colors mb-6">
+            <UploadCloud size={32} />
+         </div>
+         <h3 className="text-sm font-black uppercase text-stone-900 mb-2">Upload Files</h3>
+         <p className="text-[10px] text-stone-500 font-medium text-center mb-6 px-4">Upload images to use them in your designs.</p>
+         <label className="px-6 h-12 bg-stone-900 text-white rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all cursor-pointer">
+            Select Files
+            <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+         </label>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 min-h-[100px]">
+         {uploadedFiles.map(file => (
+           <button 
+             key={file.id}
+             draggable
+             onDragStart={(e) => {
+               e.dataTransfer.setData('type', 'image');
+               e.dataTransfer.setData('content', file.url);
+             }}
+             onClick={() => addElement('image', file.url)}
+             className="aspect-square rounded-xl overflow-hidden group relative bg-stone-100"
+           >
+              <img src={file.url} referrerPolicy="no-referrer" className="w-full h-full object-cover transition-transform group-hover:scale-110" alt="" />
+              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                 <Plus className="text-white bg-mustard rounded-full p-1" size={24} />
+              </div>
+           </button>
+         ))}
+      </div>
     </div>
   );
 
@@ -889,12 +1146,57 @@ export default function App() {
   const renderInspectorTab = () => {
     const el = (data.floatingElements || []).find(e => e.id === selectedElementId);
     if (!el) return (
-      <div className="flex flex-col items-center justify-center pt-20 text-center px-6">
-        <div className="w-16 h-16 bg-stone-50 rounded-full flex items-center justify-center text-stone-200 mb-4">
-          <Info size={32} />
-        </div>
-        <h3 className="text-sm font-black uppercase text-stone-900 mb-1">No Element Selected</h3>
-        <p className="text-[10px] text-stone-500 font-medium leading-relaxed">Select any element on the canvas to edit its properties here.</p>
+      <div className="space-y-8 px-1">
+        <section className="space-y-4">
+           <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Canvas Settings</h3>
+           <div className="p-6 bg-stone-900 rounded-[32px] border border-stone-800">
+              <div className="flex items-center gap-4 mb-6">
+                 <div className="w-12 h-12 bg-[#E8B931]/10 text-[#E8B931] rounded-2xl flex items-center justify-center">
+                    <Maximize2 size={24} />
+                 </div>
+                 <div>
+                    <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Active Size</p>
+                    <p className="text-xl font-black text-white">{data.pageSize || 'A4'} <span className="text-stone-600 text-xs font-bold">{data.orientation}</span></p>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                 <button 
+                  onClick={() => setData({ ...data, orientation: data.orientation === 'portrait' ? 'landscape' : 'portrait' })}
+                  className="h-12 bg-stone-800 text-stone-300 rounded-xl text-[9px] font-black uppercase hover:bg-stone-700 hover:text-white transition-all flex items-center justify-center gap-2"
+                 >
+                    <Grid3X3 size={14}/> Switch Layout
+                 </button>
+                 <button 
+                  onClick={() => setData({ ...data, pageSize: 'A4' })}
+                  className={cn(
+                    "h-12 rounded-xl text-[9px] font-black uppercase transition-all flex items-center justify-center gap-2",
+                    data.pageSize === 'A4' ? "bg-[#E8B931] text-stone-900" : "bg-stone-800 text-stone-300 hover:bg-stone-700"
+                  )}
+                 >
+                    <FileText size={14}/> Convert to A4
+                 </button>
+              </div>
+           </div>
+        </section>
+
+        <section className="space-y-4">
+           <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Background</h3>
+           <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                 <label className="text-[9px] uppercase font-bold text-stone-500">Theme Color</label>
+                 <div className="h-12 rounded-xl border border-stone-800 relative overflow-hidden">
+                    <input type="color" value={data.themeColor} onChange={e => setData({...data, themeColor: e.target.value})} className="absolute inset-[-10px] w-[200%] h-[200%] cursor-pointer" />
+                 </div>
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[9px] uppercase font-bold text-stone-500">Accent Color</label>
+                 <div className="h-12 rounded-xl border border-stone-800 relative overflow-hidden">
+                    <input type="color" value={data.accentColor} onChange={e => setData({...data, accentColor: e.target.value})} className="absolute inset-[-10px] w-[200%] h-[200%] cursor-pointer" />
+                 </div>
+              </div>
+           </div>
+        </section>
       </div>
     );
 
@@ -2386,6 +2688,7 @@ export default function App() {
                     <p className="text-[10px] text-stone-500 font-medium leading-relaxed">Connect to your favorite tools and unlock new features.</p>
                   </div>
                 )}
+                {sidebarTab === 'uploads' && renderUploadsTab()}
                 {sidebarTab === 'pages' && renderPagesTab()}
                 {sidebarTab === 'inspector' && renderInspectorTab()}
                 {sidebarTab === 'export' && renderExportTab()}
@@ -2419,8 +2722,14 @@ export default function App() {
               <div 
                 ref={reportRef}
                 id="report-preview-area"
-                className="flex flex-col gap-12 origin-top transition-transform shadow-2xl ring-1 ring-white/5"
-                style={{ transform: `scale(${zoom})` }}
+                className="flex flex-col gap-12 origin-top transition-all shadow-2xl ring-1 ring-white/5 bg-white"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDrop}
+                style={{ 
+                  transform: `scale(${zoom})`,
+                  width: `${getPageDimensions().width}px`,
+                  minHeight: `${getPageDimensions().height}px`
+                }}
               >
                 {/* Floating Elements Layer */}
                 <div className="absolute inset-0 pointer-events-none z-[50]">
@@ -2514,11 +2823,20 @@ function PropertyBarContent({ element, onUpdate, onDelete }: { element?: Floatin
              >
                 <div className="font-serif italic font-black">I</div>
              </button>
+             <div className="w-px h-6 bg-stone-100 mx-1" />
              <button 
-               onClick={() => onUpdate({ textDecoration: element.textDecoration === 'underline' ? 'none' : 'underline' })} 
-               className={cn("w-8 h-8 flex items-center justify-center rounded-lg transition-colors", element.textDecoration === 'underline' ? "bg-stone-900 text-white" : "hover:bg-stone-50 text-stone-600")}
+               onClick={() => onUpdate({ textShadow: element.textShadow ? '' : '2px 2px 4px rgba(0,0,0,0.3)' })} 
+               className={cn("w-8 h-8 flex items-center justify-center rounded-lg transition-colors", element.textShadow ? "bg-stone-900 text-white" : "hover:bg-stone-50 text-stone-600")}
+               title="Shadow Effect"
              >
-                <div className="font-serif underline font-black">U</div>
+                <Star size={14}/>
+             </button>
+             <button 
+               onClick={() => onUpdate({ outlineWidth: element.outlineWidth ? 0 : 2, outlineColor: '#ffffff' })} 
+               className={cn("w-8 h-8 flex items-center justify-center rounded-lg transition-colors", element.outlineWidth ? "bg-stone-900 text-white" : "hover:bg-stone-50 text-stone-600")}
+               title="Outline Effect"
+             >
+                <Award size={14}/>
              </button>
           </div>
         </>

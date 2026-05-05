@@ -5,7 +5,7 @@ import {
   Plus, FileText, Calendar, ChevronRight, Loader2, Trash2, 
   LayoutDashboard, Search, LogOut, Clock, ExternalLink, Download 
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import { cn } from '../lib/utils';
@@ -95,8 +95,120 @@ export function Dashboard({ onNewReport, onSelectReport }: DashboardProps) {
     r.reportTitle.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const [isCreating, setIsCreating] = useState(false);
+  const [newReportParams, setNewReportParams] = useState({
+    pageSize: 'A4' as 'A1' | 'A2' | 'A3' | 'A4' | 'A5',
+    orientation: 'portrait' as 'portrait' | 'landscape'
+  });
+
+  const handleStartCreation = () => {
+    setIsCreating(true);
+  };
+
+  const confirmCreation = () => {
+    // We'll pass these to onNewReport
+    (onNewReport as any)(newReportParams.pageSize, newReportParams.orientation);
+    setIsCreating(false);
+  };
+
   return (
-    <div className="min-h-screen bg-stone-50 font-sans flex">
+    <div className="min-h-screen bg-stone-50 font-sans flex relative">
+      {/* Create Modal */}
+      <AnimatePresence>
+        {isCreating && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsCreating(false)}
+              className="absolute inset-0 bg-stone-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-xl bg-white rounded-[40px] shadow-2xl p-10 overflow-hidden"
+            >
+              <h2 className="text-4xl font-black text-stone-900 tracking-tighter mb-2">Configure Page.</h2>
+              <p className="text-stone-400 font-bold mb-8">Choose your canvas size and orientation before starting.</p>
+
+              <div className="space-y-8">
+                <section>
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-4">Standard Sizes</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    {['A1', 'A2', 'A3', 'A4', 'A5'].map((size) => (
+                      <button 
+                        key={size}
+                        onClick={() => setNewReportParams({ ...newReportParams, pageSize: size as any })}
+                        className={cn(
+                          "h-16 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-1",
+                          newReportParams.pageSize === size 
+                            ? "bg-mustard border-mustard text-stone-900 shadow-lg shadow-mustard/20" 
+                            : "bg-white border-stone-100 text-stone-400 hover:border-mustard"
+                        )}
+                      >
+                        <span className="text-lg font-black">{size}</span>
+                        <span className="text-[8px] font-bold uppercase opacity-60">ISO Standard</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-4">Orientation</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button 
+                      onClick={() => setNewReportParams({ ...newReportParams, orientation: 'portrait' })}
+                      className={cn(
+                        "p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-4",
+                        newReportParams.orientation === 'portrait'
+                          ? "bg-stone-900 border-stone-900 text-white shadow-xl"
+                          : "bg-stone-50 border-stone-50 text-stone-400 hover:border-mustard"
+                      )}
+                    >
+                      <div className="w-12 h-16 border-2 border-current rounded-sm opacity-60 flex items-center justify-center">
+                        <div className="w-1 h-8 bg-current opacity-20" />
+                      </div>
+                      <span className="text-xs font-black uppercase tracking-widest">Portrait</span>
+                    </button>
+                    <button 
+                      onClick={() => setNewReportParams({ ...newReportParams, orientation: 'landscape' })}
+                      className={cn(
+                        "p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-4",
+                        newReportParams.orientation === 'landscape'
+                          ? "bg-stone-900 border-stone-900 text-white shadow-xl"
+                          : "bg-stone-50 border-stone-50 text-stone-400 hover:border-mustard"
+                      )}
+                    >
+                      <div className="w-16 h-12 border-2 border-current rounded-sm opacity-60 flex items-center justify-center">
+                        <div className="w-8 h-1 bg-current opacity-20" />
+                      </div>
+                      <span className="text-xs font-black uppercase tracking-widest">Landscape</span>
+                    </button>
+                  </div>
+                </section>
+
+                <div className="flex gap-4 pt-4">
+                  <button 
+                    onClick={() => setIsCreating(false)}
+                    className="flex-1 h-14 bg-stone-50 text-stone-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-stone-100 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={confirmCreation}
+                    className="flex-[2] h-14 bg-mustard text-stone-900 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-mustard/20 hover:scale-105 active:scale-95 transition-all"
+                  >
+                    Open Canvas
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
       <aside className="w-80 bg-stone-950 p-10 flex flex-col hidden lg:flex">
         <div className="mb-12">
@@ -143,7 +255,7 @@ export function Dashboard({ onNewReport, onSelectReport }: DashboardProps) {
               </p>
             </div>
             <button 
-              onClick={onNewReport}
+              onClick={handleStartCreation}
               className="px-10 h-16 bg-stone-950 text-[#E8B931] rounded-2xl flex items-center justify-center gap-3 font-black text-sm uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all"
             >
               <Plus size={20} />
@@ -233,7 +345,7 @@ export function Dashboard({ onNewReport, onSelectReport }: DashboardProps) {
                <h3 className="text-2xl font-black text-stone-950 tracking-tighter mb-4">No reports found.</h3>
                <p className="text-stone-400 font-bold mb-8 max-w-xs mx-auto">Start by creating your first email marketing analytic report.</p>
                <button 
-                 onClick={onNewReport}
+                 onClick={handleStartCreation}
                  className="px-8 h-14 bg-stone-950 text-[#E8B931] rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-105 transition-all"
                >
                  Create New Report

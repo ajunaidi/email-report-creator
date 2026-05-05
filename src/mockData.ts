@@ -2,6 +2,8 @@ import { ReportData } from "./types";
 
 export const MOCK_FULL_DATA: ReportData = {
   reportTitle: "Ajunaidi Email Report Builder",
+  pageSize: 'A4',
+  orientation: 'portrait',
   datePeriod: "03/24/2026 - 04/22/2026",
   tags: ["General Email Marketing", "eCommerce Email Marketing"],
   heroStats: [

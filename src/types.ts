@@ -61,10 +61,15 @@ export interface FloatingElement {
   strokeWidth?: number;
   shadow?: boolean;
   borderColor?: string;
+  textShadow?: string;
+  outlineColor?: string;
+  outlineWidth?: number;
 }
 
 export interface ReportData {
   reportTitle: string;
+  pageSize: 'A1' | 'A2' | 'A3' | 'A4' | 'A5' | 'custom';
+  orientation: 'portrait' | 'landscape';
   datePeriod: string;
   tags: string[];
   heroStats?: HeroStat[];
