@@ -1980,9 +1980,13 @@ export default function App() {
 
   const handleDownloadPDF = async () => {
     if (!reportRef.current) return;
-    setLoadingMessage('Optimizing for PDF... (This may take a moment)');
+    setLoadingMessage('Preparing high-fidelity PDF... (Canva Mode)');
     setIsLoading(true);
     
+    // Ensure we are at the top of the container for best capture
+    const mainArea = reportRef.current.parentElement;
+    if (mainArea) mainArea.scrollTop = 0;
+
     const previewArea = document.getElementById('report-preview-area');
     if (!previewArea) {
       setIsLoading(false);
@@ -1990,172 +1994,143 @@ export default function App() {
     }
 
     try {
-      // 1. Ensure fonts are loaded before capturing
+      // 1. Critical: Wait for all images and fonts
       if ('fonts' in document) {
         await (document as any).fonts.ready;
       }
       
-      // Small delay to allow any pending renders/settling
-      await new Promise(r => setTimeout(r, 500));
-
-      const sections = previewArea.querySelectorAll('.print\\:break-after-page');
-      let pdf: jsPDF | null = null;
-
-      // Special style injection for html2canvas to avoid oklab/oklch errors
-      const commonOnClone = (clonedDoc: Document) => {
-        const win = clonedDoc.defaultView || window;
-        const colorRegex = /(oklch|oklab|color-mix)\((?:[^()]+|\([^()]*\))+\)/g;
-        const colorFallback = '#78716c';
-
-        // 1. Force override getComputedStyle to intercept oklch
-        const originalGetComputedStyle = win.getComputedStyle;
-        win.getComputedStyle = function(elt: Element, pseudoElt?: string | null) {
-          const style = originalGetComputedStyle.call(win, elt, pseudoElt);
-          return new Proxy(style, {
-            get(target, prop) {
-              const val = target[prop as keyof CSSStyleDeclaration];
-              if (typeof val === 'string' && (val.includes('oklch') || val.includes('oklab') || val.includes('color-mix'))) {
-                return colorFallback;
-              }
-              return val;
-            }
-          });
-        } as any;
-
-        // 2. Force replace in all style tags
-        clonedDoc.querySelectorAll('style').forEach(s => {
-          if (s.textContent) s.textContent = s.textContent.replace(colorRegex, colorFallback);
+      const images = Array.from(previewArea.querySelectorAll('img'));
+      await Promise.all(images.map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = resolve;
         });
+      }));
 
-        // 3. Flatten critical computed styles to inline styles to bypass html2canvas's internal parser failures
-        const all = clonedDoc.getElementsByTagName('*');
-        for (let i = 0; i < all.length; i++) {
-          const el = all[i] as HTMLElement;
-          if (!el.style) continue;
-          
-          try {
-            const computed = originalGetComputedStyle.call(win, el);
-            const propsToFix = ['color', 'backgroundColor', 'borderColor', 'fill', 'stroke'];
-            
-            propsToFix.forEach(prop => {
-              const val = computed[prop as any];
-              if (typeof val === 'string' && (val.includes('oklch') || val.includes('oklab') || val.includes('color-mix'))) {
-                el.style.setProperty(prop, colorFallback, 'important');
-              }
-            });
+      // Small delay for any final settling
+      await new Promise(r => setTimeout(r, 800));
 
-            const inline = el.getAttribute('style');
-            if (inline && (inline.includes('oklch') || inline.includes('oklab') || inline.includes('color-mix'))) {
-              el.style.cssText = inline.replace(colorRegex, colorFallback);
-            }
-          } catch (e) {
-            // Skip if element is not stylable
-          }
-        }
-
-        const style = clonedDoc.createElement('style');
-        style.textContent = `
-          * { 
-            transition: none !important; 
-            animation: none !important; 
-            color-scheme: light !important;
-            text-rendering: auto !important;
-          }
-          html { font-size: 16px !important; }
-          :root {
-            --color-stone-950: #0c0a09 !important;
-            --color-stone-900: #1c1917 !important;
-            --color-mustard: #e9b949 !important;
-          }
-          body {
-            background-color: ${data.themeColor} !important;
-            color: black !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            -webkit-print-color-adjust: exact !important;
-          }
-          #report-preview-area {
-            background-color: ${data.themeColor} !important;
-            width: 1200px !important;
-            display: block !important;
-            overflow: visible !important;
-            position: static !important;
-            margin: 0 auto !important;
-          }
-          .print\\:break-after-page {
-            width: 1200px !important;
-            box-shadow: none !important;
-            margin-bottom: 0 !important;
-            page-break-after: always !important;
-            break-after: page !important;
-            background-color: ${data.themeColor} !important;
-          }
-          .absolute.-top-12, .cursor-nwse-resize, .group\\/section .absolute { display: none !important; }
-          .pointer-events-none { pointer-events: auto !important; }
-          svg { overflow: visible !important; }
-        `;
-        clonedDoc.head.appendChild(style);
-      };
-
+      // Use html2canvas on the ENTIRE container to get floating elements correctly
+      const captureWidth = 1200; // Fixed width for consistent high-quality export
+      
       const captureOptions = {
-        scale: 2,
+        scale: 2, // 2x for retina quality
         useCORS: true,
-        backgroundColor: data.themeColor,
+        backgroundColor: data.themeColor || '#FFFFFF',
         logging: false,
         imageTimeout: 0,
-        onclone: commonOnClone,
-        removeContainer: true
-      };
-
-      if (sections.length === 0) {
-        // Fallback to single page
-        const canvas = await html2canvas(previewArea, captureOptions);
-        const imgData = canvas.toDataURL('image/jpeg', 0.9);
-        const w = previewArea.offsetWidth;
-        const h = previewArea.offsetHeight;
-
-        pdf = new jsPDF({ 
-          orientation: w > h ? 'l' : 'p', 
-          unit: 'px', 
-          format: [w, h]
-        });
-        pdf.addImage(imgData, 'JPEG', 0, 0, w, h);
-      } else {
-        for (let i = 0; i < sections.length; i++) {
-          const section = sections[i] as HTMLElement;
-          const canvas = await html2canvas(section, captureOptions);
-          const imgData = canvas.toDataURL('image/jpeg', 0.9);
-          const w = section.offsetWidth;
-          const h = section.offsetHeight;
-
-          if (!pdf) {
-            pdf = new jsPDF({
-              orientation: w > h ? 'l' : 'p',
-              unit: 'px',
-              format: [w, h]
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: captureWidth,
+        width: captureWidth,
+        onclone: (clonedDoc: Document) => {
+          const win = clonedDoc.defaultView || window;
+          
+          // 1. Handle Forms: Convert inputs/textareas to DIVs so they render correctly
+          clonedDoc.querySelectorAll('textarea, input').forEach((el: any) => {
+            const div = clonedDoc.createElement('div');
+            div.textContent = el.value || el.placeholder || '';
+            const style = win.getComputedStyle(el);
+            // Copy essential styling
+            ['fontSize', 'fontFamily', 'fontWeight', 'color', 'padding', 'lineHeight', 'textAlign', 'whiteSpace'].forEach(prop => {
+              (div.style as any)[prop] = style[prop as any];
             });
-          } else {
-            pdf.addPage([w, h], w > h ? 'l' : 'p');
+            div.style.width = style.width;
+            div.style.height = style.height;
+            div.style.display = 'block';
+            div.style.overflow = 'hidden';
+            el.parentNode?.replaceChild(div, el);
+          });
+
+          // 2. Fix colors and modern CSS
+          const colorRegex = /(oklch|oklab|color-mix)\((?:[^()]+|\([^()]*\))+\)/g;
+          const colorFallback = '#78716c';
+          clonedDoc.querySelectorAll('style').forEach(s => {
+            if (s.textContent) s.textContent = s.textContent.replace(colorRegex, colorFallback);
+          });
+
+          const all = clonedDoc.getElementsByTagName('*');
+          for (let i = 0; i < all.length; i++) {
+            const el = all[i] as HTMLElement;
+            const style = win.getComputedStyle(el);
+            if (style.color?.includes('oklch')) el.style.color = colorFallback;
+            if (style.backgroundColor?.includes('oklch')) el.style.backgroundColor = colorFallback;
+            if (style.borderColor?.includes('oklch')) el.style.borderColor = colorFallback;
           }
 
-          pdf.addImage(imgData, 'JPEG', 0, 0, w, h);
+          // 3. Force clean layout for capture
+          const container = clonedDoc.getElementById('report-preview-area');
+          if (container) {
+            container.style.transform = 'none';
+            container.style.width = `${captureWidth}px`;
+            container.style.margin = '0';
+            container.style.padding = '40px';
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.gap = '0'; // We will handle spacing manually if needed or use sections
+            container.style.boxShadow = 'none';
+          }
+
+          // Hide UI elements that shouldn't be in print
+          clonedDoc.querySelectorAll('.absolute.-top-12, .cursor-nwse-resize, .group\\/section .absolute, .context-toolbar').forEach(e => {
+            (e as HTMLElement).style.display = 'none';
+          });
         }
+      };
+
+      const canvas = await html2canvas(previewArea, captureOptions);
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      
+      const sections = previewArea.querySelectorAll('.print\\:break-after-page');
+      
+      // Calculate dimensions for jsPDF
+      // A4 is 210 x 297 mm. We will use pixels for precision then scale.
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'px',
+        format: [captureWidth, 1600] // Initial guess, we will adjust
+      });
+
+      if (sections.length > 0) {
+        // Multi-page export by slicing the big canvas
+        // This is tricky but leads to the best "Canva" feel where floating elements are preserved
+        let currentY = 0;
+        
+        for (let i = 0; i < sections.length; i++) {
+          const section = sections[i] as HTMLElement;
+          const sectionHeight = section.offsetHeight + 48; // add gap
+          
+          if (i > 0) pdf.addPage([captureWidth, sectionHeight], 'p');
+          else {
+            // Re-initialize first page with correct size
+            (pdf as any).deletePage(1);
+            pdf.addPage([captureWidth, sectionHeight], 'p');
+          }
+
+          // Use the big canvas and crop it for each page
+          // This ensures everything (floating elements included) is captured at once
+          pdf.addImage(imgData, 'JPEG', 0, -currentY, captureWidth, canvas.height / 2, undefined, 'FAST');
+          currentY += sectionHeight;
+        }
+      } else {
+        // Single page
+        const w = canvas.width / 2;
+        const h = canvas.height / 2;
+        const pdfSingle = new jsPDF({ orientation: w > h ? 'l' : 'p', unit: 'px', format: [w, h] });
+        pdfSingle.addImage(imgData, 'JPEG', 0, 0, w, h);
+        const title = (data.reportTitle || 'Report').replace(/\s+/g, '_');
+        pdfSingle.save(`${title}_${Date.now()}.pdf`);
+        setIsLoading(false);
+        return;
       }
 
-      if (pdf) {
-        const title = (data.reportTitle || 'Report').replace(/\s+/g, '_');
-        pdf.save(`${title}_${Date.now()}.pdf`);
-      }
+      const title = (data.reportTitle || 'Report').replace(/\s+/g, '_');
+      pdf.save(`${title}_${Date.now()}.pdf`);
+
     } catch (err) {
       console.error("PDF generation failed:", err);
-      let errorDetail = "";
-      if (err instanceof Error) {
-        errorDetail = err.message;
-        if (errorDetail.toLowerCase().includes('oklab') || errorDetail.toLowerCase().includes('oklch')) {
-          errorDetail = "Modern CSS color functions detected. We attempted to fix them, but some remain.";
-        }
-      }
-      alert(`Failed to generate PDF: ${errorDetail || 'Unknown error'}\n\nPlease try again, or download as HTML which is more reliable.`);
+      alert(`Failed to generate PDF. Please try the "Save as Web Format" option for the most accurate results.`);
     } finally {
       setIsLoading(false);
     }
