@@ -568,35 +568,57 @@ export default function App() {
     }
   };
 
-  const fetchUnsplash = async (query: string) => {
-    if (!query) return;
+  const [unsplashError, setUnsplashError] = useState<string | null>(null);
+
+  const fetchUnsplash = async (query: string, isInitial = false) => {
+    if (!query && !isInitial) return;
     setIsSearchingPhotos(true);
+    setUnsplashError(null);
     try {
       const accessKey = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
+      
       if (!accessKey) {
-        console.warn('Unsplash Access Key is missing');
-        // Fallback to some random photos if key is missing for demo
+        setUnsplashError("Unsplash API Key is missing. Please add it to environment variables as VITE_UNSPLASH_ACCESS_KEY.");
+        // Demo fallback
         setUnsplashResults([
-          { id: '1', urls: { small: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400' } },
-          { id: '2', urls: { small: 'https://images.unsplash.com/photo-1557683316-973673baf926?w=400' } },
-          { id: '3', urls: { small: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=400' } },
-          { id: '4', urls: { small: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400' } },
+          { id: '1', urls: { small: 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=400', regular: 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=1200' } },
+          { id: '2', urls: { small: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?w=400', regular: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?w=1200' } },
+          { id: '3', urls: { small: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400', regular: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200' } },
+          { id: '4', urls: { small: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400', regular: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=1200' } },
         ]);
         return;
       }
-      const response = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=20`, {
-        headers: {
-          Authorization: `Client-ID ${accessKey}`
-        }
+
+      const endpoint = isInitial 
+        ? `https://api.unsplash.com/photos?per_page=20`
+        : `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=20`;
+
+      const response = await fetch(endpoint, {
+        headers: { Authorization: `Client-ID ${accessKey}` }
       });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.errors?.[0] || 'Unsplash API error');
+      }
+
       const data = await response.json();
-      setUnsplashResults(data.results || []);
+      const results = isInitial ? data : (data.results || []);
+      setUnsplashResults(results);
+      if (results.length === 0) setUnsplashError("No photos found.");
     } catch (err) {
       console.error('Error fetching Unsplash photos:', err);
+      setUnsplashError(err instanceof Error ? err.message : 'Failed to search photos');
     } finally {
       setIsSearchingPhotos(false);
     }
   };
+
+  useEffect(() => {
+    if (elementsSubTab === 'photos' && unsplashResults.length === 0) {
+      fetchUnsplash('', true);
+    }
+  }, [elementsSubTab]);
 
   const addElement = (type: 'image' | 'shape' | 'icon' | 'text' | 'chart', content: string) => {
     const newEl: FloatingElement = {
@@ -966,8 +988,16 @@ export default function App() {
              {isSearchingPhotos ? (
                <div className="col-span-2 py-20 flex flex-col items-center justify-center text-stone-400 gap-3">
                   <Loader2 className="animate-spin" size={24} />
-                  <p className="text-[10px] font-black uppercase tracking-widest">Searching Unsplash...</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#00c4cc]">Accessing Stock Library...</p>
                </div>
+             ) : unsplashError ? (
+                <div className="col-span-2 flex flex-col items-center justify-center p-8 bg-red-50 rounded-[32px] border border-red-100">
+                   <div className="text-red-500 mb-2"><Info size={24}/></div>
+                   <p className="text-[10px] font-bold text-red-700 text-center">{unsplashError}</p>
+                   {!import.meta.env.VITE_UNSPLASH_ACCESS_KEY && (
+                     <p className="text-[8px] text-stone-400 mt-4 text-center leading-relaxed">Please go to Settings &gt; Environment Variables and add <b>VITE_UNSPLASH_ACCESS_KEY</b></p>
+                   )}
+                </div>
              ) : unsplashResults.length > 0 ? (
                unsplashResults.map(photo => (
                  <button 
