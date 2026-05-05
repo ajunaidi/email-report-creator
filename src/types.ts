@@ -38,7 +38,7 @@ export interface HeroStat {
 
 export interface FloatingElement {
   id: string;
-  type: 'image' | 'shape' | 'icon' | 'text';
+  type: 'image' | 'shape' | 'icon' | 'text' | 'chart';
   content: string; // URL, shape ID, Lucide icon name, or text content
   top: number;
   left: number;

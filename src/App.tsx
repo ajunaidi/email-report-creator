@@ -9,7 +9,7 @@ import {
   LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image, Type, Maximize2, FileText, Info,
   Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash, PieChart as PieChartIcon, ChevronUp, ChevronDown, LayoutDashboard, Chrome,
   Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile, Square, Minus, ArrowRight, Layers,
-  ChevronRight,
+  ChevronRight, ChevronLeft, Hash,
   Monitor
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -386,6 +386,27 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
         >
           {element.content}
         </div>
+      ) : element.type === 'chart' ? (
+        <div className="w-full h-full p-2 bg-white rounded-xl shadow-inner border border-stone-100 overflow-hidden">
+          <ResponsiveContainer width="100%" height="100%">
+            {element.content === 'pie' ? (
+               <PieChart>
+                 <Pie data={[{value: 40}, {value: 60}]} dataKey="value" stroke="none">
+                    <Cell fill={element.color || "#ef4444"} />
+                    <Cell fill="#f1f5f9" />
+                 </Pie>
+               </PieChart>
+            ) : element.content === 'line-chart' ? (
+               <AreaChart data={[{v: 10}, {v: 30}, {v: 25}, {v: 45}, {v: 35}]}>
+                  <Area type="monotone" dataKey="v" stroke={element.color || "#ef4444"} fill={element.color || "#ef4444"} fillOpacity={0.2} />
+               </AreaChart>
+            ) : (
+               <BarChart data={[{v: 20}, {v: 50}, {v: 30}, {v: 80}, {v: 40}]}>
+                  <Bar dataKey="v" fill={element.color || "#ef4444"} radius={[4, 4, 0, 0]} />
+               </BarChart>
+            )}
+          </ResponsiveContainer>
+        </div>
       ) : (
         <div 
           className="w-full h-full flex items-center justify-center pointer-events-none" 
@@ -430,6 +451,87 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
 
 export interface ReportDataWithOptional extends ReportData {}
 
+function RailButton({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={cn(
+        "w-full py-3 flex flex-col items-center justify-center gap-1 transition-all group relative",
+        active ? "text-mustard" : "text-stone-500 hover:text-white"
+      )}
+    >
+      {active && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-mustard rounded-r-full" />}
+      <div className={cn("transition-transform group-active:scale-90", active && "scale-110")}>{icon}</div>
+      <span className="text-[8px] font-black uppercase tracking-tighter">{label}</span>
+    </button>
+  );
+}
+
+function ContextToolbar({ selectedElementId, elements, updateEl, deleteEl, data }: { selectedElementId: string | null, elements: FloatingElement[], updateEl: (id: string, updates: Partial<FloatingElement>) => void, deleteEl: () => void, data: ReportData }) {
+  const el = elements.find(e => e.id === selectedElementId);
+  if (!el) return null;
+
+  return (
+    <div className="sticky top-4 z-[60] bg-white shadow-xl rounded-2xl border border-stone-200 p-1.5 flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-1 border-r border-stone-100 pr-2">
+        <button 
+          onClick={() => updateEl(el.id, { fontStyle: el.fontStyle === 'italic' ? 'normal' : 'italic' })}
+          className={cn("p-2 rounded-lg transition-colors", el.fontStyle === 'italic' ? "bg-mustard/10 text-mustard" : "hover:bg-stone-100")}
+        >
+          <Type size={16} className="italic" />
+        </button>
+        <button 
+          onClick={() => updateEl(el.id, { fontWeight: el.fontWeight === 'bold' ? 'normal' : 'bold' })}
+          className={cn("p-2 rounded-lg transition-colors", el.fontWeight === 'bold' ? "bg-mustard/10 text-mustard" : "hover:bg-stone-100")}
+        >
+          <span className="font-bold">B</span>
+        </button>
+      </div>
+
+      {el.type === 'text' && (
+        <div className="flex items-center gap-2 border-r border-stone-100 pr-2">
+          <input 
+             type="number" 
+             value={el.fontSize || 16} 
+             onChange={(e) => updateEl(el.id, { fontSize: parseInt(e.target.value) })}
+             className="w-12 bg-stone-50 rounded px-1 py-1 text-xs font-bold text-center border border-stone-200"
+          />
+          <div className="flex bg-stone-50 rounded-lg p-0.5 border border-stone-200">
+            {['left', 'center', 'right'].map(a => (
+              <button 
+                key={a}
+                onClick={() => updateEl(el.id, { textAlign: a as any })}
+                className={cn("w-6 h-6 flex items-center justify-center rounded transition-colors text-[10px]", el.textAlign === a ? "bg-white shadow-sm" : "text-stone-400")}
+              >
+                {a[0].toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 border-r border-stone-100 pr-2">
+         <div className="w-6 h-6 rounded border border-stone-200 overflow-hidden relative shadow-sm">
+            <input 
+              type="color" 
+              value={el.color || '#000000'} 
+              onChange={(e) => updateEl(el.id, { color: e.target.value })}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            />
+            <div className="w-full h-full" style={{ backgroundColor: el.color || '#000' }} />
+         </div>
+      </div>
+
+      <button 
+        onClick={deleteEl}
+        className="p-2 hover:bg-red-50 rounded-lg text-stone-400 hover:text-red-500 transition-colors"
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   const [data, setData] = useState<ReportData>(MOCK_FULL_DATA);
   const [reportId, setReportId] = useState<string | null>(null);
@@ -439,9 +541,45 @@ export default function App() {
   const [loadingMessage, setLoadingMessage] = useState('Loading...');
   const [copySuccess, setCopySuccess] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [sidebarTab, setSidebarTab] = useState<'design' | 'elements' | 'uploads' | 'pages' | 'export' | 'inspector'>('design');
+  const [sidebarTab, setSidebarTab] = useState<'design' | 'elements' | 'text' | 'uploads' | 'pages' | 'export' | 'inspector'>('design');
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+
+  const addElement = (type: 'image' | 'shape' | 'icon' | 'text' | 'chart', content: string) => {
+    const newEl: FloatingElement = {
+      id: `fe-${Date.now()}`,
+      type,
+      content,
+      top: 100,
+      left: 100,
+      width: type === 'text' ? 200 : 100,
+      height: type === 'text' ? 60 : 100,
+      zIndex: (data.floatingElements?.length || 0) + 1,
+      opacity: 1,
+      color: type === 'text' ? '#000000' : '#E8B931'
+    };
+    setData({ ...data, floatingElements: [...(data.floatingElements || []), newEl] });
+    handleSelectElement(newEl.id);
+  };
+
+  const updateElement = (id: string, updates: Partial<FloatingElement>) => {
+    const copy = [...(data.floatingElements || [])];
+    const idx = copy.findIndex(e => e.id === id);
+    if (idx !== -1) {
+      copy[idx] = { ...copy[idx], ...updates };
+      setData({ ...data, floatingElements: copy });
+    }
+  };
+
+  const handleDeleteElement = () => {
+    if (!selectedElementId) return;
+    setData({
+      ...data,
+      floatingElements: (data.floatingElements || []).filter(e => e.id !== selectedElementId)
+    });
+    handleSelectElement(null);
+  };
 
   const handleSelectElement = (id: string | null) => {
     setSelectedElementId(id);
@@ -461,6 +599,33 @@ export default function App() {
   const [isViewerMode, setIsViewerMode] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [view, setView] = useState<'auth' | 'dashboard' | 'editor'>('auth');
+
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+  const performSave = useCallback(
+    debounce(async (currentData: ReportData, currentId: string | null) => {
+      if (!user || isViewerMode) return;
+      try {
+        const id = await saveReport(currentId, currentData);
+        if (id && id !== currentId) {
+          setReportId(id);
+          // Update URL without refreshing
+          const newUrl = `${window.location.pathname}?reportId=${id}`;
+          window.history.pushState({ path: newUrl }, '', newUrl);
+        }
+        setLastSaved(new Date());
+      } catch (err) {
+        console.error("Auto-save failed", err);
+      }
+    }, 2000),
+    [user, isViewerMode]
+  );
+
+  useEffect(() => {
+    if (view === 'editor' && !isViewerMode) {
+      performSave(data, reportId);
+    }
+  }, [data, view, isViewerMode, reportId]);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   useEffect(() => {
@@ -516,6 +681,362 @@ export default function App() {
     setView('editor');
     loadReport(id);
   };
+
+  const renderDesignTab = () => (
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-2">Style Palettes</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { name: 'Midnight', primary: '#1a1a1a', accent: '#ef4444' },
+            { name: 'Forest', primary: '#064e3b', accent: '#fbbf24' },
+            { name: 'Ocean', primary: '#1e3a8a', accent: '#3b82f6' },
+            { name: 'Sunset', primary: '#4c1d95', accent: '#f472b6' },
+          ].map((theme) => (
+            <button 
+              key={theme.name}
+              onClick={() => setData({ ...data, themeColor: theme.primary, accentColor: theme.accent })}
+              className="group text-left space-y-2 p-3 rounded-2xl border border-stone-100 hover:border-mustard transition-all bg-white shadow-sm"
+            >
+              <div className="flex h-6 rounded-full overflow-hidden">
+                <div className="flex-1" style={{ backgroundColor: theme.primary }} />
+                <div className="flex-1" style={{ backgroundColor: theme.accent }} />
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-tight text-stone-500 group-hover:text-stone-900 transition-colors">{theme.name}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Custom Branding</h3>
+        <div className="grid grid-cols-2 gap-3 pb-2 border-b border-stone-50">
+          <div className="space-y-1">
+            <label className="text-[9px] uppercase font-bold text-stone-500">Theme</label>
+            <input type="color" value={data.themeColor} onChange={(e) => setData({...data, themeColor: e.target.value})} className="w-full h-10 rounded-lg border border-stone-200 cursor-pointer" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[9px] uppercase font-bold text-stone-500">Accent</label>
+            <input type="color" value={data.accentColor} onChange={(e) => setData({...data, accentColor: e.target.value})} className="w-full h-10 rounded-lg border border-stone-200 cursor-pointer" />
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Typography Pairing</h3>
+        <div className="space-y-2">
+          {[
+            { name: 'Modern Sans', family: 'sans' },
+            { name: 'Classic Serif', family: 'serif' },
+            { name: 'Technical Mono', family: 'mono' },
+          ].map((font) => (
+             <button 
+               key={font.family}
+               onClick={() => setData({ ...data, fontFamily: font.family as any })}
+               className={cn(
+                 "w-full text-left p-4 rounded-2xl border transition-all",
+                 data.fontFamily === font.family ? "bg-mustard border-mustard text-stone-900" : "bg-stone-50 border-stone-100 text-stone-600 hover:border-mustard"
+               )}
+             >
+               <span className="text-xs font-black uppercase tracking-widest">{font.name}</span>
+             </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+
+  const renderElementsTab = () => (
+    <div className="space-y-8">
+      <div className="bg-stone-50 p-2 rounded-2xl flex gap-1 border border-stone-100">
+        <button className="flex-1 h-10 bg-white shadow-sm rounded-xl text-[10px] font-black uppercase tracking-tighter text-stone-900 border border-stone-200">Graphics</button>
+        <button className="flex-1 h-10 text-[10px] font-black uppercase tracking-tighter text-stone-400 hover:text-stone-600 transition-colors">Photos</button>
+      </div>
+
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Quick Shapes</h3>
+          <button className="text-[9px] font-black uppercase text-mustard">See All</button>
+        </div>
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { id: 'square', icon: <Square size={20}/> },
+            { id: 'circle', icon: <div className="w-5 h-5 rounded-full border-2 border-current"/> },
+            { id: 'solid-circle', icon: <div className="w-5 h-5 rounded-full bg-current"/> },
+            { id: 'triangle', icon: <Triangle size={20}/> },
+          ].map((shape) => (
+            <button 
+              key={shape.id} 
+              onClick={() => addElement('shape', shape.id)}
+              className="aspect-square bg-stone-50 rounded-xl flex items-center justify-center text-stone-400 hover:bg-mustard/10 hover:text-mustard hover:scale-110 active:scale-95 transition-all outline-none"
+            >
+              {shape.icon}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Charts</h3>
+        <div className="grid grid-cols-2 gap-3">
+           <ToolButton icon={<PieChartIcon size={24}/>} label="Pie Chart" onClick={() => addElement('chart', 'pie')} />
+           <ToolButton icon={<BarChart3 size={24}/>} label="Bar Chart" onClick={() => addElement('chart', 'bar')} />
+           <ToolButton icon={<TrendingUp size={24}/>} label="Line Chart" onClick={() => addElement('chart', 'line-chart')} />
+           <ToolButton icon={<Maximize2 size={24}/>} label="Grid Layout" onClick={() => {}} />
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Icons</h3>
+        <div className="grid grid-cols-4 gap-3">
+           {[Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile].map((Icon, i) => (
+             <button key={i} onClick={() => addElement('icon', Icon.name.toLowerCase())} className="aspect-square bg-stone-50 rounded-xl flex items-center justify-center text-stone-400 hover:text-mustard transition-colors">
+                <Icon size={20} />
+             </button>
+           ))}
+        </div>
+      </section>
+    </div>
+  );
+
+  const ToolButton = ({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick: () => void }) => (
+    <button onClick={onClick} className="flex flex-col items-center justify-center gap-2 p-4 bg-stone-50 border border-stone-100 rounded-2xl hover:border-mustard hover:shadow-xl hover:shadow-mustard/5 transition-all active:scale-95 group">
+       <div className="text-stone-400 group-hover:text-mustard group-hover:scale-110 transition-all">{icon}</div>
+       <span className="text-[10px] font-black text-stone-500 uppercase tracking-widest group-hover:text-stone-900">{label}</span>
+    </button>
+  );
+
+  const renderTextTab = () => (
+    <div className="space-y-8">
+       <section className="space-y-4">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Default Styles</h3>
+          <div className="space-y-3">
+             <button 
+               onClick={() => addElement('text', 'Heading 1')}
+               className="w-full text-left p-4 bg-stone-50 border border-stone-100 rounded-2xl hover:border-mustard hover:shadow-lg transition-all group"
+             >
+                <div className="text-2xl font-black text-stone-900 group-hover:text-mustard transition-colors">Add a heading</div>
+                <div className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Extra Bold / 120px</div>
+             </button>
+             <button 
+               onClick={() => addElement('text', 'Subheading')}
+               className="w-full text-left p-4 bg-stone-50 border border-stone-100 rounded-2xl hover:border-mustard hover:shadow-lg transition-all group"
+             >
+                <div className="text-lg font-bold text-stone-700 group-hover:text-stone-900 transition-colors">Add a subheading</div>
+                <div className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Bold / 60px</div>
+             </button>
+             <button 
+               onClick={() => addElement('text', 'Body text')}
+               className="w-full text-left p-4 bg-stone-50 border border-stone-100 rounded-2xl hover:border-mustard hover:shadow-lg transition-all group"
+             >
+                <div className="text-sm font-medium text-stone-500 group-hover:text-stone-700 transition-colors">Add body text</div>
+                <div className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Medium / 24px</div>
+             </button>
+          </div>
+       </section>
+
+       <section className="space-y-4">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Font Combinations</h3>
+          <div className="grid grid-cols-1 gap-3">
+             {[
+               { h: 'Bold Statement', s: 'modern approach', hf: 'sans', sf: 'mono' },
+               { h: 'The Classic', s: 'Traditional quality', hf: 'serif', sf: 'sans' },
+             ].map((combo, i) => (
+               <button 
+                 key={i} 
+                 onClick={() => {
+                   addElement('text', combo.h);
+                   // maybe we could add a grouped element here? But for now just the heading
+                 }}
+                 className="p-5 bg-stone-900 text-white rounded-3xl text-left hover:scale-[1.02] transition-all shadow-xl shadow-stone-200"
+               >
+                  <div className={cn("text-xl font-black mb-1", combo.hf === 'serif' ? 'font-serif' : combo.hf === 'mono' ? 'font-mono' : '')}>{combo.h}</div>
+                  <div className={cn("text-xs opacity-60", combo.sf === 'serif' ? 'font-serif' : combo.sf === 'mono' ? 'font-mono' : '')}>{combo.s}</div>
+               </button>
+             ))}
+          </div>
+       </section>
+    </div>
+  );
+
+  const renderPagesTab = () => (
+    <div className="space-y-3">
+      {data.sections.map((section, idx) => (
+        <div key={section.id} className="flex items-center gap-3 p-3 bg-stone-50 rounded-2xl group border border-transparent hover:border-mustard/30 transition-all">
+          <div className="w-10 h-10 bg-stone-200 rounded-lg flex items-center justify-center font-black text-stone-500 text-xs">
+            {idx + 1}
+          </div>
+          <div className="flex-1 min-w-0">
+             <p className="text-[10px] font-black uppercase text-stone-400">Page {idx + 1}</p>
+             <p className="text-xs font-bold text-stone-700 truncate">{section.type}</p>
+          </div>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => removeSection(section.id)} className="p-1.5 hover:text-red-500"><Trash size={14}/></button>
+            <button onClick={() => moveSection(section.id, 'up')} className="p-1.5 hover:text-mustard"><ChevronUp size={14}/></button>
+          </div>
+        </div>
+      ))}
+      <button 
+        onClick={() => addSection('after')}
+        className="w-full py-4 border-2 border-dashed border-stone-200 rounded-2xl flex items-center justify-center gap-2 text-stone-400 hover:text-mustard hover:border-mustard transition-all text-xs font-bold uppercase"
+      >
+        <Plus size={16} /> New Page
+      </button>
+    </div>
+  );
+
+  const renderInspectorTab = () => {
+    const el = (data.floatingElements || []).find(e => e.id === selectedElementId);
+    if (!el) return (
+      <div className="flex flex-col items-center justify-center pt-20 text-center px-6">
+        <div className="w-16 h-16 bg-stone-50 rounded-full flex items-center justify-center text-stone-200 mb-4">
+          <Info size={32} />
+        </div>
+        <h3 className="text-sm font-black uppercase text-stone-900 mb-1">No Element Selected</h3>
+        <p className="text-[10px] text-stone-500 font-medium leading-relaxed">Select any element on the canvas to edit its properties here.</p>
+      </div>
+    );
+
+    const updateEl = (updates: Partial<FloatingElement>) => updateElement(el.id, updates);
+
+    return (
+      <div className="space-y-8">
+        <section className="space-y-3">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Layering & Position</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => updateEl({ zIndex: (el.zIndex || 0) + 1 })} className="h-10 bg-stone-50 border border-stone-200 rounded-xl text-[9px] font-black uppercase hover:bg-white transition-all flex items-center justify-center gap-2">
+               <ChevronUp size={14}/> Bring Forward
+            </button>
+            <button onClick={() => updateEl({ zIndex: Math.max(0, (el.zIndex || 0) - 1) })} className="h-10 bg-stone-50 border border-stone-200 rounded-xl text-[9px] font-black uppercase hover:bg-white transition-all flex items-center justify-center gap-2">
+               <ChevronDown size={14}/> Send Backward
+            </button>
+          </div>
+        </section>
+
+        <section className="space-y-3">
+           <div className="flex justify-between items-center">
+             <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Appearance</h3>
+             <span className="text-[10px] font-bold text-stone-900">{Math.round((el.opacity || 1) * 100)}%</span>
+           </div>
+           <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[9px] uppercase font-bold text-stone-500 tracking-tighter">Opacity</label>
+                <input type="range" min="0" max="1" step="0.01" value={el.opacity ?? 1} onChange={(e) => updateEl({ opacity: parseFloat(e.target.value) })} className="w-full accent-mustard" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] uppercase font-bold text-stone-500 tracking-tighter">Corner Radius</label>
+                <input type="range" min="0" max="100" value={el.borderRadius ?? 0} onChange={(e) => updateEl({ borderRadius: parseInt(e.target.value) })} className="w-full accent-mustard" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] uppercase font-bold text-stone-500 tracking-tighter">Rotation</label>
+                <input type="range" min="0" max="360" value={el.rotation ?? 0} onChange={(e) => updateEl({ rotation: parseInt(e.target.value) })} className="w-full accent-mustard" />
+              </div>
+           </div>
+        </section>
+
+        {el.type === 'image' && (
+          <section className="space-y-3">
+             <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Image Control</h3>
+             <ImageUploader label="Replace Image" value={el.content} onUpload={(url) => updateEl({ content: url })} onClear={() => updateEl({ content: '' })} />
+             <div className="flex items-center gap-2 mt-4">
+                <button onClick={() => updateEl({ shadow: !el.shadow })} className={cn("flex-1 h-10 rounded-xl text-[9px] font-black uppercase border transition-all", el.shadow ? "bg-mustard border-mustard text-stone-900" : "bg-stone-50 border-stone-200 text-stone-400 hover:text-stone-600")}>Drop Shadow</button>
+             </div>
+          </section>
+        )}
+
+        {(el.type === 'shape' || el.type === 'icon' || el.type === 'text') && (
+           <section className="space-y-3">
+             <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Color & Border</h3>
+             <div className="grid grid-cols-2 gap-3">
+               <div className="space-y-1">
+                 <label className="text-[9px] uppercase font-bold text-stone-500">Color</label>
+                 <input type="color" value={el.color || '#E8B931'} onChange={(e) => updateEl({ color: e.target.value })} className="w-full h-10 rounded-lg border border-stone-200 cursor-pointer" />
+               </div>
+               <div className="space-y-1">
+                 <label className="text-[9px] uppercase font-bold text-stone-500">Border</label>
+                 <input type="color" value={el.borderColor || '#000000'} onChange={(e) => updateEl({ borderColor: e.target.value })} className="w-full h-10 rounded-lg border border-stone-200 cursor-pointer" />
+               </div>
+             </div>
+             <div className="space-y-1">
+                <label className="text-[9px] uppercase font-bold text-stone-500 tracking-tighter">Border Width</label>
+                <input type="range" min="0" max="20" value={el.strokeWidth ?? 2} onChange={(e) => updateEl({ strokeWidth: parseInt(e.target.value) })} className="w-full accent-mustard" />
+              </div>
+           </section>
+        )}
+
+        {el.type === 'text' && (
+           <section className="space-y-3">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Typography Details</h3>
+              <div className="grid grid-cols-2 gap-2">
+                 <div className="space-y-1">
+                    <label className="text-[9px] uppercase font-bold text-stone-500">Size</label>
+                    <input type="number" value={el.fontSize || 16} onChange={(e) => updateEl({ fontSize: parseInt(e.target.value) })} className="w-full h-8 bg-stone-50 border border-stone-200 rounded px-2 text-[10px] font-bold" />
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[9px] uppercase font-bold text-stone-500">Weight</label>
+                    <select value={el.fontWeight || 'normal'} onChange={(e) => updateEl({ fontWeight: e.target.value })} className="w-full h-8 bg-stone-50 border border-stone-200 rounded px-2 text-[10px] font-bold">
+                       <option value="normal">Normal</option>
+                       <option value="bold">Bold</option>
+                       <option value="black">Black</option>
+                    </select>
+                 </div>
+              </div>
+           </section>
+        )}
+
+        <div className="pt-6 mt-6 border-t border-stone-100 italic">
+          <button 
+            onClick={handleDeleteElement}
+            className="w-full py-3 bg-red-50 text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
+          >
+            <Trash2 size={14}/> Delete Element
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderExportTab = () => (
+    <div className="space-y-6">
+      <div className="p-4 bg-mustard/5 rounded-2xl border border-mustard/10 space-y-3 shadow-inner shadow-mustard/5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-mustard rounded-xl flex items-center justify-center text-stone-900 shadow-md">
+            <FileText size={20} />
+          </div>
+          <div>
+            <h4 className="text-xs font-black uppercase tracking-tight">Standard PDF</h4>
+            <p className="text-[10px] text-stone-500 font-medium leading-tight">High quality report (CMYK ready)</p>
+          </div>
+        </div>
+        <button 
+          onClick={handleDownloadPDF}
+          className="w-full py-3 bg-mustard text-stone-900 rounded-xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-mustard/20 hover:scale-[1.02] active:scale-95 transition-all"
+        >
+          Download PDF
+        </button>
+      </div>
+
+      <div className="space-y-2">
+         <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Sharing</h3>
+         <button 
+           onClick={handleGenerateShareLink}
+           className="w-full py-3 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-black transition-colors"
+         >
+           <Share2 size={14} /> {copySuccess ? 'Link Copied!' : 'Copy Share Link'}
+         </button>
+         {reportId && (
+            <a 
+              href={`${window.location.protocol}//${window.location.host}${window.location.pathname}?reportId=${reportId}&viewer=true`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full py-3 bg-stone-50 text-stone-900 border border-stone-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-center hover:bg-white transition-colors"
+            >
+              Open Online Viewer
+            </a>
+         )}
+      </div>
+    </div>
+  );
   const reportRef = useRef<HTMLDivElement>(null);
 
   const addSection = (type: any) => {
@@ -1717,1211 +2238,221 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden relative" style={{ backgroundColor: data.themeColor }}>
-      {/* Sidebar Toggle for Desktop (Floating) */}
+    <div className="flex h-screen overflow-hidden bg-stone-900 border-t border-stone-800">
+      {/* Left Rail */}
       {!isViewerMode && (
-        <button 
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className={cn(
-            "fixed bottom-8 left-8 z-[100] w-12 h-12 bg-stone-900 border border-stone-800 rounded-full flex items-center justify-center text-mustard shadow-2xl transition-all hover:scale-110 md:flex hidden",
-            !isSidebarOpen && "left-8"
-          )}
-          title={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
-        >
-          {isSidebarOpen ? <X size={20} /> : <Settings2 size={20} />}
-        </button>
-      )}
-
-      {/* Top bar for mobile/desktop layout control */}
-      {!isViewerMode && (
-        <header className="fixed top-0 left-0 right-0 h-14 border-b border-stone-800 bg-stone-950/80 backdrop-blur-xl flex items-center justify-between px-4 z-50 md:hidden">
-          <div className="flex items-center gap-2">
-             <div className="w-8 h-8 bg-mustard rounded-lg flex items-center justify-center text-stone-900"><Mail size={16} /></div>
-             <p className="text-xs font-black uppercase tracking-tighter text-white">Ajunaidi</p>
+        <aside className="w-20 bg-stone-950 border-r border-stone-800 flex flex-col items-center py-4 z-[100]">
+          <div className="mb-8 w-10 h-10 bg-mustard rounded-xl flex items-center justify-center text-stone-900 shadow-lg shadow-mustard/20">
+            <Mail size={24} strokeWidth={3} />
           </div>
-          <button 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
-            className="w-10 h-10 rounded-lg bg-stone-900 flex items-center justify-center text-mustard border border-stone-800"
-          >
-            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </header>
-      )}
-
-      {/* Sidebar - Control Panel */}
-      <aside 
-        id="sidebar-editor" 
-        className={cn(
-          "bg-stone-900 text-white overflow-y-auto border-r border-stone-800 space-y-6 scrollbar-thin transition-all duration-500 ease-in-out fixed md:relative z-[60] h-full pt-20 md:pt-6 shadow-2xl",
-          isSidebarOpen ? "w-full md:w-[400px] translate-x-0 p-6" : "w-0 -translate-x-full md:translate-x-0 md:w-0 p-0 overflow-hidden",
-          isViewerMode && "hidden"
-        )}
-      >
-        {/* Minimize Button attached to sidebar edge */}
-        <button 
-          onClick={() => setIsSidebarOpen(false)}
-          className={cn(
-            "fixed top-1/2 -translate-y-1/2 z-[70] w-8 h-24 bg-stone-800 border border-stone-700/50 rounded-r-2xl flex flex-col items-center justify-center text-stone-500 hover:text-mustard hover:bg-stone-700 transition-all md:flex hidden group shadow-2xl",
-            isSidebarOpen ? "left-[400px]" : "left-0"
-          )}
-        >
-          <span className="text-[8px] font-black uppercase vertical-text -rotate-90 whitespace-nowrap mb-2 opacity-0 group-hover:opacity-100 transition-opacity">Minimize</span>
-          {isSidebarOpen ? <ChevronUp className="-rotate-90" size={16} /> : <ChevronUp className="rotate-90" size={16} />}
-        </button>
-
-        <div className={cn("transition-opacity duration-300", !isSidebarOpen && "opacity-0")}>
-          <div className="flex items-center gap-3 p-4 rounded-xl border border-stone-700" style={{ backgroundColor: 'rgba(41, 37, 36, 0.5)' }}>
-            <button 
-              onClick={() => setView('dashboard')}
-              className="w-10 h-10 bg-mustard rounded-xl flex items-center justify-center text-stone-900 border-2" 
-              style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}
-              title="Back to Dashboard"
-            >
-              <LayoutDashboard size={20} />
-            </button>
-            <div className="flex-1">
-              <h1 className="font-bold text-lg leading-tight uppercase tracking-tighter">Ajunaidi</h1>
-              <p className="text-[10px] text-stone-400 uppercase tracking-widest font-black">Email Report Builder</p>
-            </div>
-            {/* Mobile Close Button */}
-            <button 
-              onClick={() => setIsSidebarOpen(false)} 
-              className="md:hidden block w-10 h-10 bg-stone-800 rounded-xl flex items-center justify-center text-stone-500 hover:text-white border border-stone-700"
-            >
-              <X size={20} />
-            </button>
-          </div>
-        </div>
-        <div className={cn("space-y-6 transition-all duration-300", !isSidebarOpen && "opacity-0 invisible")}>
-
-        {isOfflineMode && (
-          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest flex items-center gap-2">
-                <Info size={12} /> Offline Mode Active
-              </span>
-              <button onClick={() => setView('auth')} className="text-amber-500/60 hover:text-amber-500 text-[9px] font-black uppercase underline">Sign In</button>
-            </div>
-            <p className="text-[9px] text-stone-400 leading-relaxed italic">
-              Changes will only be stored in your browser session. Cloud saving is currently disabled due to configuration issues.
-            </p>
-          </div>
-        )}
-
-        <Section 
-          label="Cloud Storage" 
-          icon={<ExternalLink size={14} />}
-          isActive={activeSectionId === 'cloud'}
-          onHeaderClick={() => handleSelection('cloud')}
-        >
-           <div className="space-y-3">
-             <button 
-               onClick={async () => {
-                 await handleSaveReport();
-                 alert('Report saved to your account successfully!');
-               }}
-               className="w-full h-12 bg-stone-800 rounded-xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest hover:bg-stone-700 transition-all border border-stone-700"
-             >
-               <Save size={16} className="text-mustard" />
-               Save to Account
-             </button>
-
-             <button 
-               onClick={async () => {
-                 if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
-                   try {
-                     if (reportId) {
-                       await deleteReport(reportId);
-                       alert('Report deleted from cloud.');
-                     }
-                     setView('dashboard');
-                   } catch (err) {
-                     console.error('Delete failed:', err);
-                     let errorMsg = 'Failed to delete report.';
-                     if (err instanceof Error) {
-                       try {
-                         const parsed = JSON.parse(err.message);
-                         if (parsed.error && parsed.error.includes('permissions')) {
-                           errorMsg = 'Permission denied: You do not have permission to delete this report.';
-                         } else {
-                           errorMsg = parsed.error || err.message;
-                         }
-                       } catch {
-                         errorMsg = err.message;
-                       }
-                     }
-                     alert(errorMsg);
-                   }
-                 }
-               }}
-               className="w-full h-12 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest transition-all border border-red-500/20"
-             >
-               <Trash2 size={16} />
-               Delete Report
-             </button>
-
-             <button 
-               onClick={() => {
-                 alert('Google Drive integration requires an API Key. Please configure GOOGLE_DRIVE_API_KEY in your settings.');
-               }}
-               className="w-full h-12 bg-white text-stone-950 rounded-xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest hover:bg-stone-50 transition-all shadow-lg"
-             >
-               <Chrome size={16} className="text-[#4285F4]" />
-               Upload to Google Drive
-             </button>
-           </div>
-        </Section>
-
-        {/* User & Sharing Controls */}
-        <div className="p-4 rounded-xl border border-stone-700 space-y-3" style={{ backgroundColor: 'rgba(41, 37, 36, 0.8)' }}>
-          {user ? (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 overflow-hidden">
-                <div className="w-8 h-8 flex-shrink-0 rounded-full bg-mustard flex items-center justify-center text-stone-900 border border-white/20">
-                  <UserIcon size={14} />
-                </div>
-                <div className="overflow-hidden">
-                  <p className="text-[10px] font-bold truncate">{user.displayName || user.email}</p>
-                  <p className="text-[8px] text-stone-400 uppercase tracking-widest flex items-center gap-1">
-                    {isSaving ? <Loader2 size={8} className="animate-spin" /> : <Save size={8} />}
-                    {isSaving ? 'Saving...' : 'All changes saved'}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={handleSignOut} 
-                className="p-2 hover:bg-red-500/10 text-stone-500 hover:text-red-500 rounded-lg transition-colors flex-shrink-0"
-                title="Sign Out"
-              >
-                <LogOut size={14} />
-              </button>
-            </div>
-          ) : (
-            <button onClick={handleSignIn} className="w-full flex items-center justify-center gap-2 py-2.5 bg-white text-stone-900 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-stone-100 transition-colors">
-              <LogIn size={14} /> Sign in to Auto-Save
-            </button>
-          )}
-
-          <button 
-            onClick={handleGenerateShareLink} 
-            disabled={isSaving && !copySuccess}
-            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-              copySuccess ? 'bg-green-500 text-white' : 'bg-mustard text-stone-900 hover:bg-mustard/90'
-            }`}
-          >
-            {copySuccess ? <Plus size={14} className="rotate-45" /> : <Share2 size={14} />}
-            {copySuccess ? 'Link Copied!' : 'Copy Share Preview Link'}
-          </button>
-
-          {reportId && (
-            <a 
-              href={`${window.location.protocol}//${window.location.host}${window.location.pathname}?reportId=${reportId}&viewer=true`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-stone-800 text-stone-300 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-stone-700 transition-colors border border-stone-700"
-            >
-              <LinkIcon size={14} /> Open Live Preview
-            </a>
-          )}
-        </div>
-
-        <Section 
-          label="Brand Identity" 
-          icon={<Palette size={14} />}
-          isActive={activeSectionId === 'brand'}
-          onHeaderClick={() => handleSelection('brand')}
-        >
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">Canvas Color</label>
-                <div className="flex gap-2 items-center">
-                  <input type="color" value={data.themeColor} onChange={(e) => setData({ ...data, themeColor: e.target.value })} className="w-8 h-8 p-1 bg-stone-800 border border-stone-700 rounded-lg cursor-pointer" />
-                  <span className="text-[10px] font-mono text-stone-500 uppercase">{data.themeColor}</span>
-                </div>
-              </div>
-              <div>
-                <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">Accent Color</label>
-                <div className="flex gap-2 items-center">
-                  <input type="color" value={data.accentColor} onChange={(e) => setData({ ...data, accentColor: e.target.value })} className="w-8 h-8 p-1 bg-stone-800 border border-stone-700 rounded-lg cursor-pointer" />
-                  <span className="text-[10px] font-mono text-stone-500 uppercase">{data.accentColor}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">Card Background</label>
-                <div className="flex gap-2 items-center">
-                  <input type="color" value={data.cardColor} onChange={(e) => setData({ ...data, cardColor: e.target.value })} className="w-8 h-8 p-1 bg-stone-800 border border-stone-700 rounded-lg cursor-pointer" />
-                  <span className="text-[10px] font-mono text-stone-500 uppercase">{data.cardColor}</span>
-                </div>
-              </div>
-              <div>
-                <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">Text Color</label>
-                <div className="flex gap-2 items-center">
-                  <input type="color" value={data.textColor} onChange={(e) => setData({ ...data, textColor: e.target.value })} className="w-8 h-8 p-1 bg-stone-800 border border-stone-700 rounded-lg cursor-pointer" />
-                  <span className="text-[10px] font-mono text-stone-500 uppercase">{data.textColor}</span>
-                </div>
-              </div>
+          
+          <div className="flex-1 w-full space-y-2">
+            <RailButton icon={<Palette size={20} />} label="Design" active={sidebarTab === 'design'} onClick={() => { setSidebarTab('design'); setIsSidebarOpen(true); }} />
+            <RailButton icon={<LayoutDashboard size={20} />} label="Elements" active={sidebarTab === 'elements'} onClick={() => { setSidebarTab('elements'); setIsSidebarOpen(true); }} />
+            <RailButton icon={<Type size={20} />} label="Text" active={sidebarTab === 'text'} onClick={() => { setSidebarTab('text'); setIsSidebarOpen(true); }} />
+            <RailButton icon={<Copy size={20} />} label="Pages" active={sidebarTab === 'pages'} onClick={() => { setSidebarTab('pages'); setIsSidebarOpen(true); }} />
+            <div className="pt-4 mt-4 border-t border-stone-800">
+              <RailButton icon={<Download size={20} />} label="Export" active={sidebarTab === 'export'} onClick={() => { setSidebarTab('export'); setIsSidebarOpen(true); }} />
             </div>
           </div>
-        </Section>
 
-        <Section 
-          label="Text Colors" 
-          icon={<Type size={14} />}
-          isActive={activeSectionId === 'text-colors'}
-          onHeaderClick={() => handleSelection('text-colors')}
-        >
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">H1 Heading</label>
-                <div className="flex gap-2 items-center">
-                  <input type="color" value={data.h1Color} onChange={(e) => setData({ ...data, h1Color: e.target.value })} className="w-8 h-8 p-1 bg-stone-800 border border-stone-700 rounded-lg cursor-pointer" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">H2 Heading</label>
-                <div className="flex gap-2 items-center">
-                  <input type="color" value={data.h2Color} onChange={(e) => setData({ ...data, h2Color: e.target.value })} className="w-8 h-8 p-1 bg-stone-800 border border-stone-700 rounded-lg cursor-pointer" />
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">H3 Heading</label>
-                <div className="flex gap-2 items-center">
-                  <input type="color" value={data.h3Color} onChange={(e) => setData({ ...data, h3Color: e.target.value })} className="w-8 h-8 p-1 bg-stone-800 border border-stone-700 rounded-lg cursor-pointer" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">Description</label>
-                <div className="flex gap-2 items-center">
-                  <input type="color" value={data.descColor} onChange={(e) => setData({ ...data, descColor: e.target.value })} className="w-8 h-8 p-1 bg-stone-800 border border-stone-700 rounded-lg cursor-pointer" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </Section>
-
-        <Section 
-          label="Layout & Corner" 
-          icon={<Maximize2 size={14} />}
-          isActive={activeSectionId === 'layout'}
-          onHeaderClick={() => handleSelection('layout')}
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">Typography Style</label>
-              <select 
-                value={data.fontFamily} 
-                onChange={(e) => setData({ ...data, fontFamily: e.target.value as any })}
-                className="w-full bg-stone-800 border border-stone-700 rounded-lg h-10 px-3 text-xs text-white outline-none focus:ring-1 focus:ring-mustard"
-              >
-                <option value="sans">Modern (Sans-Serif)</option>
-                <option value="serif">Elegant (Serif)</option>
-                <option value="mono">Technical (Monospace)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">Corner Rounding</label>
-              <select 
-                value={data.borderRadius} 
-                onChange={(e) => setData({ ...data, borderRadius: e.target.value as any })}
-                className="w-full bg-stone-800 border border-stone-700 rounded-lg h-10 px-3 text-xs text-white outline-none focus:ring-1 focus:ring-mustard"
-              >
-                <option value="none">Sharp (None)</option>
-                <option value="sm">Subtle (SM)</option>
-                <option value="md">Balanced (MD)</option>
-                <option value="lg">Soft (LG)</option>
-                <option value="xl">Rounded (XL)</option>
-                <option value="2xl">Extra Rounded (2XL)</option>
-                <option value="full">Pill (Full)</option>
-              </select>
-            </div>
-          </div>
-        </Section>
-
-        <Section 
-          label="Brand Assets" 
-          icon={<Image size={14} />}
-          isActive={activeSectionId === 'assets'}
-          onHeaderClick={() => handleSelection('assets')}
-        >
-              <label className="flex items-center gap-2 cursor-pointer bg-stone-800 border border-stone-700 rounded-lg p-3 hover:bg-stone-700 transition-all">
-                <Image size={14} className="text-mustard" />
-                <span className="text-xs text-stone-300 font-bold">{data.clientLogo ? 'Update Logo' : 'Upload Logo'}</span>
-                <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-              </label>
-              {data.clientLogo && (
-                <div className="mt-3 relative group w-fit mx-auto">
-                  <div className="bg-white rounded-lg p-2 border border-stone-700 shadow-xl overflow-hidden">
-                    <img src={data.clientLogo} className="max-h-24 object-contain" />
-                  </div>
-                  <button 
-                    onClick={() => setData({ ...data, clientLogo: "" })}
-                    className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1.5 shadow-2xl opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 size={10} />
-                  </button>
-                </div>
-              )}
-        </Section>
-
-        <Section 
-          label="Chart Image Replacements" 
-          icon={<Image size={14} />}
-          isActive={activeSectionId === 'charts'}
-          onHeaderClick={() => handleSelection('charts')}
-        >
-           <p className="text-[9px] text-stone-500 mb-3 uppercase font-black px-1 tracking-tighter">Replace dynamic charts with static images</p>
-           <div className="space-y-4">
-             <ImageUploader label="Growth Chart" value={data.growthChartImage} onUpload={(url) => setData({...data, growthChartImage: url})} onClear={() => setData({...data, growthChartImage: ""})} />
-             <ImageUploader label="Distribution Chart" value={data.distributionChartImage} onUpload={(url) => setData({...data, distributionChartImage: url})} onClear={() => setData({...data, distributionChartImage: ""})} />
-             <ImageUploader label="Sent vs Opens Chart" value={data.sentOpensChartImage} onUpload={(url) => setData({...data, sentOpensChartImage: url})} onClear={() => setData({...data, sentOpensChartImage: ""})} />
-             <ImageUploader label="Funnel Chart" value={data.funnelChartImage} onUpload={(url) => setData({...data, funnelChartImage: url})} onClear={() => setData({...data, funnelChartImage: ""})} />
-             <ImageUploader label="Engagement Trend Chart" value={data.engagementTrendChartImage} onUpload={(url) => setData({...data, engagementTrendChartImage: url})} onClear={() => setData({...data, engagementTrendChartImage: ""})} />
-           </div>
-        </Section>
-
-        <Section 
-          label="Graphic Elements" 
-          icon={<Palette size={14} />}
-          isActive={activeSectionId === 'graphics' || !!selectedElementId}
-          onHeaderClick={() => handleSelection('graphics')}
-        >
-          <p className="text-[10px] text-stone-500 mb-4 px-1 uppercase font-black tracking-tighter italic">Floating sticks, shapes, grass or icons</p>
-          <div className="space-y-4">
-             {/* Inspector for selected element */}
-             {selectedElementId && (
-               <div className="p-4 bg-stone-950 border border-[#E8B931]/30 rounded-xl space-y-4 shadow-inner ring-1 ring-[#E8B931]/10">
-                 <div className="flex items-center justify-between">
-                   <h3 className="text-[10px] font-black uppercase tracking-widest text-[#E8B931]">Design Inspector</h3>
-                   <button onClick={() => handleSelectElement(null)} className="text-stone-500 hover:text-white"><X size={12}/></button>
+          <div className="mt-auto space-y-2 w-full pb-4">
+            {user ? (
+               <button onClick={handleSignOut} className="w-full py-4 flex flex-col items-center justify-center gap-1 text-stone-500 hover:text-red-500 transition-colors group">
+                 <div className="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center border border-white/10 group-hover:border-red-500/30">
+                    <UserIcon size={16} />
                  </div>
-                 
-                 {(() => {
-                   const idx = data.floatingElements?.findIndex(e => e.id === selectedElementId);
-                   if (idx === undefined || idx === -1) return null;
-                   const el = data.floatingElements![idx];
-                   
-                   const updateEl = (patch: Partial<FloatingElement>) => {
-                     const copy = [...(data.floatingElements || [])];
-                     copy[idx] = { ...el, ...patch };
-                     setData({ ...data, floatingElements: copy });
-                   };
+                 <span className="text-[7px] font-black uppercase tracking-tighter">Exit</span>
+               </button>
+            ) : (
+               <RailButton icon={<LogIn size={20} />} label="In" active={false} onClick={handleSignIn} />
+            )}
+          </div>
+        </aside>
+      )}
 
-                   return (
-                     <div className="space-y-3">
-                       <div className="grid grid-cols-2 gap-4">
-                         <div className="space-y-1">
-                           <label className="text-[9px] uppercase font-bold text-stone-500">Opacity</label>
-                           <input 
-                             type="range" min="0" max="1" step="0.1" 
-                             value={el.opacity ?? 1} 
-                             onChange={(e) => updateEl({ opacity: parseFloat(e.target.value) })}
-                             className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
-                           />
-                         </div>
-                         <div className="space-y-1">
-                           <label className="text-[9px] uppercase font-bold text-stone-500">Rotation</label>
-                           <input 
-                             type="range" min="0" max="360" step="5" 
-                             value={el.rotation || 0} 
-                             onChange={(e) => updateEl({ rotation: parseInt(e.target.value) })}
-                             className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
-                           />
-                         </div>
-                       </div>
+      {/* Secondary Panel */}
+      {!isViewerMode && (
+        <motion.aside 
+          initial={false}
+          animate={{ width: isSidebarOpen ? 360 : 0, opacity: isSidebarOpen ? 1 : 0 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+          className="bg-white border-r border-stone-200 overflow-hidden relative shadow-2xl z-[90]"
+        >
+          <div className="w-[360px] h-full flex flex-col">
+            <header className="h-16 px-6 border-b border-stone-100 flex items-center justify-between flex-shrink-0">
+               <h2 className="font-black uppercase tracking-widest text-xs text-stone-900">{sidebarTab}</h2>
+               <button onClick={() => setIsSidebarOpen(false)} className="w-8 h-8 rounded-full hover:bg-stone-50 flex items-center justify-center text-stone-400">
+                 <ChevronLeft size={20} />
+               </button>
+            </header>
+            
+            <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+              {sidebarTab === 'design' && renderDesignTab()}
+              {sidebarTab === 'elements' && renderElementsTab()}
+              {sidebarTab === 'text' && renderTextTab()}
+              {sidebarTab === 'pages' && renderPagesTab()}
+              {sidebarTab === 'inspector' && renderInspectorTab()}
+              {sidebarTab === 'export' && renderExportTab()}
+            </div>
+          </div>
+        </motion.aside>
+      )}
 
-                       <div className="space-y-1">
-                         <label className="text-[9px] uppercase font-bold text-stone-500">Z-Index ({el.zIndex})</label>
-                         <div className="flex gap-2">
-                            <button onClick={() => updateEl({ zIndex: Math.max(0, el.zIndex - 1) })} className="flex-1 py-1 bg-stone-800 rounded text-[9px] font-black uppercase">- Back</button>
-                            <button onClick={() => updateEl({ zIndex: el.zIndex + 1 })} className="flex-1 py-1 bg-stone-800 rounded text-[9px] font-black uppercase">+ Front</button>
-                         </div>
-                       </div>
-
-                       {el.type === 'text' && (
-                         <div className="space-y-3">
-                            <div className="space-y-1">
-                              <label className="text-[9px] uppercase font-bold text-stone-500">Text Content</label>
-                              <textarea 
-                                value={el.content} 
-                                onChange={(e) => updateEl({ content: e.target.value })}
-                                className="w-full bg-stone-800 border border-stone-700 rounded p-2 text-[10px] text-white outline-none h-16 focus:border-mustard transition-colors"
-                                placeholder="Enter text..."
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="space-y-1">
-                                <label className="text-[9px] uppercase font-bold text-stone-500">Font Size ({el.fontSize || 16}px)</label>
-                                <input 
-                                  type="range" min="8" max="250" step="1" 
-                                  value={el.fontSize || 16} 
-                                  onChange={(e) => updateEl({ fontSize: parseInt(e.target.value) })}
-                                  className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[9px] uppercase font-bold text-stone-500">Weight</label>
-                                <select 
-                                  value={el.fontWeight || 'bold'} 
-                                  onChange={(e) => updateEl({ fontWeight: e.target.value })}
-                                  className="w-full bg-stone-800 border border-stone-700 rounded h-7 text-[9px] text-white outline-none"
-                                >
-                                  <option value="normal">Normal</option>
-                                  <option value="medium">Medium</option>
-                                  <option value="bold">Bold</option>
-                                  <option value="black">Black</option>
-                                </select>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                               <div className="space-y-1">
-                                <label className="text-[9px] uppercase font-bold text-stone-500">Align</label>
-                                <div className="flex bg-stone-800 rounded p-1 border border-stone-700">
-                                  {(['left', 'center', 'right'] as const).map(a => (
-                                    <button 
-                                      key={a}
-                                      onClick={() => updateEl({ textAlign: a })}
-                                      className={cn("flex-1 py-1 rounded text-[8px] font-black uppercase transition-colors", el.textAlign === a ? "bg-mustard text-stone-900" : "text-stone-400 hover:text-white")}
-                                    >
-                                      {a}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[9px] uppercase font-bold text-stone-500">Spacing</label>
-                                <input 
-                                  type="range" min="-5" max="20" step="1" 
-                                  value={el.letterSpacing || 0} 
-                                  onChange={(e) => updateEl({ letterSpacing: parseInt(e.target.value) })}
-                                  className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[9px] uppercase font-bold text-stone-500">Padding ({el.padding || 8}px)</label>
-                                <input 
-                                  type="range" min="0" max="100" step="1" 
-                                  value={el.padding || 8} 
-                                  onChange={(e) => updateEl({ padding: parseInt(e.target.value) })}
-                                  className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[9px] uppercase font-bold text-stone-500">Line Height ({el.lineHeight || 1.2})</label>
-                                <input 
-                                  type="range" min="0.5" max="3" step="0.1" 
-                                  value={el.lineHeight || 1.2} 
-                                  onChange={(e) => updateEl({ lineHeight: parseFloat(e.target.value) })}
-                                  className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
-                                />
-                              </div>
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[9px] uppercase font-bold text-stone-500">Font Family</label>
-                              <select 
-                                value={el.fontFamily || "'Inter', sans-serif"} 
-                                onChange={(e) => updateEl({ fontFamily: e.target.value })}
-                                className="w-full bg-stone-800 border border-stone-700 rounded h-7 text-[9px] text-white outline-none"
-                              >
-                                <option value="'Inter', sans-serif">Inter (Sans)</option>
-                                <option value="'Outfit', sans-serif">Outfit (Modern)</option>
-                                <option value="mono">Mono (Tech)</option>
-                                <option value="'Playfair Display', serif">Playfair (Serif)</option>
-                              </select>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                               <button 
-                                 onClick={() => updateEl({ fontStyle: el.fontStyle === 'italic' ? 'normal' : 'italic' })}
-                                 className={cn("py-1 rounded text-[8px] font-black uppercase transition-colors border border-stone-700", el.fontStyle === 'italic' ? "bg-mustard text-stone-900" : "bg-stone-800 text-stone-400")}
-                               >
-                                 Italic
-                               </button>
-                               <button 
-                                 onClick={() => updateEl({ textDecoration: el.textDecoration === 'underline' ? 'none' : 'underline' })}
-                                 className={cn("py-1 rounded text-[8px] font-black uppercase transition-colors border border-stone-700", el.textDecoration === 'underline' ? "bg-mustard text-stone-900" : "bg-stone-800 text-stone-400")}
-                               >
-                                 Underline
-                               </button>
-                            </div>
-                         </div>
-                       )}
-
-                       {(el.type === 'shape' || el.type === 'icon') && (
-                         <div className="space-y-1">
-                           <label className="text-[9px] uppercase font-bold text-stone-500">Stroke Width ({el.strokeWidth || 2})</label>
-                           <input 
-                             type="range" min="1" max="20" step="1" 
-                             value={el.strokeWidth || (el.type === 'shape' ? 4 : 2)} 
-                             onChange={(e) => updateEl({ strokeWidth: parseInt(e.target.value) })}
-                             className="w-full accent-mustard h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer"
-                           />
-                         </div>
-                       )}
-
-                       {el.type !== 'image' && (
-                         <>
-                           <div className="space-y-1">
-                           <label className="text-[9px] uppercase font-bold text-stone-500">Main Color</label>
-                           <div className="flex flex-wrap gap-1">
-                             {['#E8B931', '#22c55e', '#ef4444', '#3b82f6', '#f59e0b', '#ec4899', '#ffffff', '#000000'].map(c => (
-                               <button 
-                                 key={c}
-                                 onClick={() => updateEl({ color: c })}
-                                 className={cn("w-5 h-5 rounded-full border border-white/20", el.color === c && "ring-2 ring-mustard")}
-                                 style={{ backgroundColor: c }}
-                               />
-                             ))}
-                           </div>
-                         </div>
-                         <div className="space-y-1">
-                           <label className="text-[9px] uppercase font-bold text-stone-500">Border Color (or Label BG)</label>
-                           <div className="flex flex-wrap gap-1">
-                             {['transparent', '#E8B931', '#22c55e', '#ef4444', '#3b82f6', '#ffffff', '#000000', '#78716c'].map(c => (
-                               <button 
-                                 key={c}
-                                 onClick={() => updateEl({ borderColor: c === 'transparent' ? undefined : c })}
-                                 className={cn("w-5 h-5 rounded-full border border-white/20 relative overflow-hidden", el.borderColor === c && "ring-2 ring-mustard")}
-                                 style={{ backgroundColor: c === 'transparent' ? '#333' : c }}
-                               >
-                                 {c === 'transparent' && <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-red-500 to-transparent opacity-50" />}
-                               </button>
-                             ))}
-                           </div>
-                         </div>
-                         <div className="space-y-1">
-                            <label className="text-[9px] uppercase font-bold text-stone-500">Shadow</label>
-                            <button 
-                              onClick={() => updateEl({ shadow: !el.shadow })}
-                              className={cn("w-full py-1 rounded text-[8px] font-black uppercase transition-colors border border-stone-700", el.shadow ? "bg-mustard text-stone-900" : "bg-stone-800 text-stone-400")}
-                            >
-                              {el.shadow ? 'Solid shadow' : 'Lifted shadow'}
-                            </button>
-                         </div>
-                       </>
-                     )}
-                     </div>
-                   );
-                 })()}
-               </div>
-             )}
-
-             {/* Icons / "Grass" */}
-             <div className="grid grid-cols-4 gap-2 mb-4">
-               {[
-                 { id: 'sprout', icon: Sprout, label: 'Grass' },
-                 { id: 'leaf', icon: Leaf, label: 'Leaf' },
-                 { id: 'star', icon: Star, label: 'Star' },
-                 { id: 'heart', icon: Heart, label: 'Heart' },
-                 { id: 'zap', icon: Zap, label: 'Zap' },
-                 { id: 'award', icon: Award, label: 'Award' },
-                 { id: 'smile', icon: Smile, label: 'Smile' },
-                 { id: 'arrow', icon: ArrowRight, label: 'Arrow' },
-               ].map(item => (
-                 <button 
-                   key={item.id}
-                   onClick={() => {
-                     const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'icon', content: item.id, top: 200, left: 200, width: 40, height: 40, zIndex: 10, color: '#E8B931' };
-                     setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
-                   }}
-                   className="flex flex-col items-center justify-center p-2 bg-stone-800 rounded-lg border border-stone-700 hover:border-mustard transition-all group"
-                 >
-                   <item.icon size={16} className="text-stone-400 group-hover:text-mustard" />
-                   <span className="text-[8px] font-black uppercase mt-1 text-stone-600">{item.label}</span>
+      {/* Workspace */}
+      <main className="flex-1 flex flex-col relative bg-stone-100 overflow-hidden">
+        {/* Workspace Toolbar */}
+        {!isViewerMode && (
+          <header className={`h-16 bg-white border-b border-stone-200 flex items-center justify-between px-6 z-40 shadow-sm transition-all ${!isSidebarOpen && 'pl-12'}`}>
+            <div className="flex items-center gap-4">
+               {!isSidebarOpen && (
+                 <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-stone-50 rounded-lg text-stone-400">
+                   <Menu size={20} />
                  </button>
-               ))}
-             </div>
+               )}
+               <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-stone-100 flex items-center justify-center text-stone-400">
+                    <Hash size={14} />
+                  </div>
+                  <h1 className="text-sm font-black text-stone-900 tracking-tight uppercase truncate max-w-[200px]">
+                    <EditableText value={data.reportTitle || 'Untitled Design'} onChange={(v) => setData({...data, reportTitle: v})} isViewer={false} />
+                  </h1>
+               </div>
+            </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-center gap-1">
+              <div className="flex items-center bg-stone-50 rounded-xl p-1 border border-stone-200 mr-4">
+                <button onClick={() => setZoom(Math.max(0.1, zoom - 0.1))} className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-stone-900"><Minus size={14}/></button>
+                <div className="w-12 text-center text-[10px] font-black text-stone-600">{Math.round(zoom * 100)}%</div>
+                <button onClick={() => setZoom(Math.min(2, zoom + 0.1))} className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-stone-900"><Plus size={14}/></button>
+              </div>
               <button 
-                onClick={() => {
-                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'circle', top: 100, left: 100, width: 100, height: 100, zIndex: 1, opacity: 0.5, color: '#E8B931', strokeWidth: 4 };
-                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
-                }}
-                className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
+                onClick={handleDownloadPDF}
+                className="px-4 h-10 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all flex items-center gap-2 shadow-lg shadow-black/10"
               >
-                + Empty Circle
-              </button>
-              <button 
-                onClick={() => {
-                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'solid-circle', top: 100, left: 100, width: 100, height: 100, zIndex: 1, opacity: 0.5, color: '#E8B931' };
-                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
-                }}
-                className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
-              >
-                + Solid Circle
-              </button>
-              <button 
-                onClick={() => {
-                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'square', top: 120, left: 120, width: 100, height: 100, zIndex: 1, opacity: 0.5, color: '#E8B931', strokeWidth: 4 };
-                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
-                }}
-                className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
-              >
-                + Empty Square
-              </button>
-              <button 
-                onClick={() => {
-                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'solid-square', top: 120, left: 120, width: 100, height: 100, zIndex: 1, opacity: 0.5, color: '#E8B931' };
-                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
-                }}
-                className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
-              >
-                + Solid Square
-              </button>
-              <button 
-                onClick={() => {
-                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'rectangle', top: 140, left: 140, width: 200, height: 100, zIndex: 1, opacity: 0.5, color: '#E8B931', strokeWidth: 4 };
-                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
-                }}
-                className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
-              >
-                + Rectangle
-              </button>
-              <button 
-                onClick={() => {
-                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'shape', content: 'line', top: 160, left: 160, width: 200, height: 10, zIndex: 1, opacity: 0.5, color: '#E8B931', strokeWidth: 4 };
-                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
-                }}
-                className="py-2 bg-stone-800 border border-stone-700 rounded-lg text-white text-[9px] font-black uppercase tracking-widest hover:border-mustard transition-all"
-              >
-                + Line
-              </button>
-              <button 
-                onClick={() => {
-                  const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'text', content: 'NEW TEXT', top: 150, left: 150, width: 200, height: 60, zIndex: 10, opacity: 1, color: '#000000', fontSize: 40, fontWeight: 'black' };
-                  setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
-                }}
-                className="py-2 bg-mustard border border-stone-700 rounded-lg text-stone-900 text-[9px] font-black uppercase tracking-widest hover:bg-white transition-all"
-              >
-                + Text Layer
+                <Download size={14} /> Download
               </button>
             </div>
-            
-            <ImageUploader 
-              label="Add Floating Image" 
-              value="" 
-              onUpload={(url) => {
-                const newEl: FloatingElement = { id: `fe-${Date.now()}`, type: 'image', content: url, top: 150, left: 150, width: 200, height: 200, zIndex: 5 };
-                setData({...data, floatingElements: [...(data.floatingElements || []), newEl]});
-              }} 
-              onClear={() => {}}
+          </header>
+        )}
+
+        {/* Canvas Area */}
+        <div className="flex-1 overflow-auto bg-[#f3f3f3] relative scrollbar-thin p-12 flex flex-col items-center">
+            {/* Property Bar (Canva-like) */}
+            <AnimatePresence>
+               {selectedElementId && (
+                 <motion.div 
+                   initial={{ y: 20, opacity: 0 }}
+                   animate={{ y: 0, opacity: 1 }}
+                   exit={{ y: 20, opacity: 0 }}
+                   className="fixed top-20 left-1/2 -translate-x-1/2 z-[60] bg-white border border-stone-200 shadow-2xl rounded-2xl h-12 flex items-center px-4 gap-4"
+                 >
+                    <PropertyBarContent 
+                      element={(data.floatingElements || []).find(e => e.id === selectedElementId)} 
+                      onUpdate={(updates) => updateElement(selectedElementId, updates)}
+                      onDelete={handleDeleteElement}
+                    />
+                 </motion.div>
+               )}
+            </AnimatePresence>
+
+            {/* Overlay Toolbar when element is selected */}
+            <ContextToolbar 
+               selectedElementId={selectedElementId}
+               elements={data.floatingElements || []}
+               updateEl={updateElement}
+               deleteEl={handleDeleteElement}
+               data={data}
             />
 
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-              {(data.floatingElements || []).map((el, i) => (
-                <div key={el.id} className="p-2 bg-stone-900 border border-stone-800 rounded-lg flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-stone-800 rounded flex items-center justify-center text-[10px] text-mustard font-black">
-                      {i + 1}
-                    </div>
-                    <span className="text-[10px] text-stone-400 uppercase font-bold">{el.type}</span>
-                  </div>
-                  <div className="flex gap-1">
-                    <button 
-                      onClick={() => {
-                        const copy = [...(data.floatingElements || [])];
-                        // change z-index or something?
-                        copy[i] = { ...el, zIndex: (el.zIndex || 0) + 1 };
-                        setData({...data, floatingElements: copy});
-                      }}
-                      title="Bring Forward"
-                      className="text-stone-500 hover:text-white"
-                    >
-                      <ChevronUp size={12} />
-                    </button>
-                    <button 
-                      onClick={() => {
-                        const copy = [...(data.floatingElements || [])];
-                        copy.splice(i, 1);
-                        setData({...data, floatingElements: copy});
-                        if (selectedElementId === el.id) handleSelectElement(null);
-                      }}
-                      title="Delete Element"
-                      className="text-stone-500 hover:text-red-500 p-1"
-                    >
-                      <Trash size={12} />
-                    </button>
-                    <button 
-                      onClick={() => handleSelectElement(el.id)}
-                      className={cn("text-stone-500 hover:text-mustard p-1", selectedElementId === el.id && "text-mustard")}
-                      title="Select Element"
-                    >
-                      <Settings2 size={12} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Section>
-
-        <Section 
-          label="Section Management" 
-          icon={<Maximize2 size={14} />}
-          isActive={(data.sections || []).some(s => s.id === activeSectionId)}
-          onHeaderClick={() => handleSelection('mgmt')}
-        >
-          <p className="text-[10px] text-stone-500 mb-4 px-1 uppercase font-black tracking-tighter">Adjust background images for each page</p>
-          <div className="space-y-4">
-            {(data.sections || []).map((section, idx) => (
-              <div key={section.id} className="p-3 bg-stone-800 rounded-lg border border-stone-700 space-y-2 group">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black uppercase text-stone-500">Page {idx + 1}: {section.type}</span>
-                  <button 
-                    onClick={() => {
-                      if (confirm('Remove this section/page?')) {
-                        removeSection(section.id);
-                      }
-                    }}
-                    className="text-stone-600 hover:text-red-500 transition-colors"
-                    title="Delete Section"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-                <ImageUploader 
-                  label="Background Image" 
-                  value={section.bgImage} 
-                  onUpload={(url) => {
-                    const copy = [...(data.sections || [])];
-                    copy[idx] = { ...copy[idx], bgImage: url };
-                    setData({...data, sections: copy});
-                  }} 
-                  onClear={() => {
-                    const copy = [...(data.sections || [])];
-                    copy[idx] = { ...copy[idx], bgImage: "" };
-                    setData({...data, sections: copy});
-                  }} 
-                />
-              </div>
-            ))}
-          </div>
-        </Section>
-
-        <Section 
-          label="Hero Section Stats" 
-          icon={<Telescope size={14} />}
-          isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'cover'}
-          onHeaderClick={() => handleSelection('hero')}
-        >
-          <div className="space-y-4">
-            {(data.heroStats || []).map((stat, idx) => (
-              <div key={stat.id} className="p-3 bg-stone-800 rounded-lg border border-stone-700 space-y-2 relative group-item">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black uppercase text-stone-500">Stat {idx + 1}</span>
-                  <button 
-                    onClick={() => {
-                      const copy = [...(data.heroStats || [])];
-                      copy.splice(idx, 1);
-                      setData({...data, heroStats: copy});
-                    }}
-                    className="text-stone-500 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-                <Input label="Value" value={stat.value} onChange={(v) => {
-                  const copy = [...(data.heroStats || [])];
-                  copy[idx].value = v;
-                  setData({...data, heroStats: copy});
-                }} />
-                <Input label="Label" value={stat.label} onChange={(v) => {
-                  const copy = [...(data.heroStats || [])];
-                  copy[idx].label = v;
-                  setData({...data, heroStats: copy});
-                }} />
-                <Input label="Sub-label" value={stat.subLabel} onChange={(v) => {
-                  const copy = [...(data.heroStats || [])];
-                  copy[idx].subLabel = v;
-                  setData({...data, heroStats: copy});
-                }} />
-                <div>
-                  <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1">Icon</label>
-                  <select 
-                    value={stat.iconName} 
-                    onChange={e => {
-                      const copy = [...(data.heroStats || [])];
-                      copy[idx].iconName = e.target.value;
-                      setData({...data, heroStats: copy});
-                    }}
-                    className="w-full bg-stone-900 border border-stone-700 rounded h-8 px-2 text-[10px] text-white outline-none"
-                  >
-                    {Object.keys(ICON_MAP).map(icon => (
-                      <option key={icon} value={icon}>{icon}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            ))}
-            <button 
-              onClick={() => {
-                const newStat = { id: `hs-${Date.now()}`, label: 'New Stat', value: '0', subLabel: 'Description', iconName: 'TrendingUp' };
-                setData({...data, heroStats: [...(data.heroStats || []), newStat]});
-              }}
-              className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-stone-700 rounded-lg text-stone-500 hover:text-mustard hover:border-mustard transition-all text-[10px] font-black uppercase tracking-widest"
+            <div 
+              ref={reportRef}
+              id="report-preview-area"
+              className="flex flex-col gap-12 origin-top transition-transform shadow-2xl relative"
+              style={{ transform: `scale(${zoom})` }}
             >
-              <Plus size={14} /> Add Hero Stat
-            </button>
-          </div>
-        </Section>
-
-        <Section 
-          label="1. Project Basics" 
-          icon={<Settings2 size={14} />}
-          isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'cover'}
-          onHeaderClick={() => handleSelection('basics')}
-        >
-          <Input label="Report Title" value={data.reportTitle} onChange={(v: string) => setData({...data, reportTitle: v})} />
-          <Input label="Date Period" value={data.datePeriod} onChange={(v: string) => setData({...data, datePeriod: v})} />
-        </Section>
-
-        <Section 
-          label="2 & 3. Goals & Lists" 
-          icon={<Filter size={14} />}
-          isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'goals'}
-          onHeaderClick={() => handleSelection('goals')}
-        >
-           <p className="text-[9px] text-stone-500 mb-2 uppercase font-black px-1 tracking-tighter">Deals and Contacts Goals</p>
-           <div className="grid grid-cols-2 gap-2 mb-4">
-              <Input label="Contacts Goal" type="number" value={data.conversionGoal} onChange={(v: string) => setData({...data, conversionGoal: Number(v)})} />
-              <Input label="Contacts Actual" type="number" value={data.conversionCount} onChange={(v: string) => setData({...data, conversionCount: Number(v)})} />
-              <Input label="Deals Goal" type="number" value={data.dealsGoal} onChange={(v: string) => setData({...data, dealsGoal: Number(v)})} />
-              <Input label="Deals Actual" type="number" value={data.dealsCount} onChange={(v: string) => setData({...data, dealsCount: Number(v)})} />
-           </div>
-           <p className="text-[9px] text-stone-500 mb-2 uppercase font-black px-1 tracking-tighter">Account List Totals</p>
-           <div className="grid grid-cols-2 gap-2">
-              <Input label="Total Contacts" type="number" value={data.listContacts} onChange={(v: string) => setData({...data, listContacts: Number(v)})} />
-              <Input label="Total Deals" type="number" value={data.listDeals} onChange={(v: string) => setData({...data, listDeals: Number(v)})} />
-           </div>
-        </Section>
-
-        <Section 
-          label="4 & 5. Analysis" 
-          icon={<MessageSquare size={14} />}
-          isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'goals'}
-          onHeaderClick={() => handleSelection('analysis')}
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1 tracking-wider">Executive Summary</label>
-              <textarea 
-                value={data.summary} 
-                onChange={e => setData({...data, summary: e.target.value})} 
-                className="w-full bg-stone-800 border border-stone-700 rounded-lg p-3 text-xs focus:ring-1 focus:ring-mustard outline-none transition-all text-white h-28 leading-relaxed"
-              />
-            </div>
-            <div>
-              <label className="block text-[9px] font-bold text-stone-600 uppercase mb-1 tracking-wider">Key Recommendations</label>
-              <textarea 
-                value={data.recommendations.join('\n')} 
-                onChange={e => setData({...data, recommendations: e.target.value.split('\n')})} 
-                className="w-full bg-stone-800 border border-stone-700 rounded-lg p-3 text-xs focus:ring-1 focus:ring-mustard outline-none transition-all text-white h-28 leading-relaxed placeholder:text-stone-600"
-                placeholder="Enter one recommendation per line..."
-              />
-            </div>
-          </div>
-        </Section>
-
-        <Section 
-          label="6, 7 & 8. Top Metrics" 
-          icon={<TrendingUp size={14} />}
-          isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'growth'}
-          onHeaderClick={() => handleSelection('metrics')}
-        >
-          <div className="grid grid-cols-2 gap-2 mb-2">
-            <Input label="Contact Count" type="number" value={data.contactCount} onChange={(v: string) => setData({...data, contactCount: Number(v)})} />
-            <Input label="Deal Count" type="number" value={data.dealCount} onChange={(v: string) => setData({...data, dealCount: Number(v)})} />
-          </div>
-          <Input label="Deals Value ($)" type="number" value={data.dealsValue} onChange={(v: string) => setData({...data, dealsValue: Number(v)})} />
-        </Section>
-
-        <Section 
-          label="9 & 10. Growth Data" 
-          icon={<Briefcase size={14} />}
-          isActive={activeSectionId && data.sections.find(s => s.id === activeSectionId)?.type === 'growth'}
-          onHeaderClick={() => handleSelection('growth')}
-        >
-           <Input label="Chart Labels (comma sep)" value={data.growthLabels.join(', ')} onChange={(v: string) => setData({...data, growthLabels: v.split(',').map(s => s.trim())})} />
-           <Input label="Contact Growth Values" value={data.growthContacts.join(', ')} onChange={(v: string) => setData({...data, growthContacts: v.split(',').map(s => Number(s.trim()))})} />
-           <Input label="Deal Growth Values" value={data.growthDeals.join(', ')} onChange={(v: string) => setData({...data, growthDeals: v.split(',').map(s => Number(s.trim()))})} />
-        </Section>
-
-        <Section label="11. Deals Breakdown" icon={<TrendingUp size={14} />}>
-           <div className="space-y-2">
-            {data.dealSources.map((s, idx) => (
-              <div key={s.id} className="flex gap-1 items-center p-2 rounded-lg border border-stone-800" style={{ backgroundColor: 'rgba(41, 37, 36, 0.5)' }}>
-                  <input className="flex-1 bg-stone-900 border-none rounded h-7 px-2 text-[10px] focus:ring-1 focus:ring-mustard" value={s.source} onChange={e => {
-                    const copy = [...data.dealSources];
-                    copy[idx].source = e.target.value;
-                    setData({...data, dealSources: copy});
-                  }} />
-                  <input className="w-20 bg-stone-900 border-none rounded h-7 px-2 text-[10px] focus:ring-1 focus:ring-mustard" type="number" value={s.value} onChange={e => {
-                    const copy = [...data.dealSources];
-                    copy[idx].value = Number(e.target.value);
-                    setData({...data, dealSources: copy});
-                  }} />
-              </div>
-            ))}
-           </div>
-        </Section>
-
-        <Section label="Add Report Sections" icon={<Plus size={14} />}>
-           <div className="grid grid-cols-2 gap-2">
-              {[
-                { type: 'cover', label: 'Cover' },
-                { type: 'overview', label: 'Overview' },
-                { type: 'goals', label: 'Goals' },
-                { type: 'growth', label: 'Growth' },
-                { type: 'deals', label: 'Deals List' },
-                { type: 'metrics', label: 'Metrics Grid' },
-                { type: 'trends', label: 'Trends' },
-                { type: 'funnel', label: 'Funnel' },
-                { type: 'table', label: 'DataTable' },
-                { type: 'footer', label: 'Footer' },
-              ].map((btn) => (
-                <button 
-                  key={btn.type}
-                  onClick={() => addSection(btn.type as any)}
-                  className="flex items-center gap-2 py-2 px-3 bg-stone-800 hover:bg-mustard hover:text-stone-950 transition-all rounded-lg text-[10px] font-black uppercase tracking-tight text-stone-400 text-left"
-                >
-                  <Plus size={12} className="flex-shrink-0" /> {btn.label}
-                </button>
-              ))}
-           </div>
-        </Section>
-
-        <Section label="12 & 13. Engagement Summary" icon={<Mail size={14} />}>
-           <div className="grid grid-cols-2 gap-2 mb-4">
-              <Input label="Emails Sent Goal" type="number" value={data.emailsSentGoal} onChange={(v: string) => setData({...data, emailsSentGoal: Number(v)})} />
-              <Input label="Emails Sent Actual" type="number" value={data.actualSent} onChange={(v: string) => setData({...data, actualSent: Number(v)})} />
-              <Input label="Opened Goal" type="number" value={data.emailsOpenedGoal} onChange={(v: string) => setData({...data, emailsOpenedGoal: Number(v)})} />
-              <Input label="Opened Actual" type="number" value={data.actualOpens} onChange={(v: string) => setData({...data, actualOpens: Number(v)})} />
-              <Input label="Click Goal" type="number" value={data.linkClicksGoal} onChange={(v: string) => setData({...data, linkClicksGoal: Number(v)})} />
-              <Input label="Click Actual" type="number" value={data.actualClicks} onChange={(v: string) => setData({...data, actualClicks: Number(v)})} />
-           </div>
-           <Input label="Total Campaign Replies" type="number" value={data.actualReplies} onChange={(v: string) => setData({...data, actualReplies: Number(v)})} />
-        </Section>
-
-        <Section label="14, 15 & 16. Fast Metrics" icon={<ExternalLink size={14} />}>
-           <div className="grid grid-cols-2 gap-2">
-              <Input label="Metric: Emails Sent" type="number" value={data.metricsEmailsSent} onChange={(v: string) => setData({...data, metricsEmailsSent: Number(v)})} />
-              <Input label="Metric: Opens" type="number" value={data.metricsOpens} onChange={(v: string) => setData({...data, metricsOpens: Number(v)})} />
-              <Input label="Metric: Open Rate %" value={data.metricsOpenRate} onChange={(v: string) => setData({...data, metricsOpenRate: v})} />
-           </div>
-        </Section>
-
-        <Section label="17, 18 & 19. Trends & Clicks" icon={<TrendingUp size={14} />}>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2">
-                <Input label="Sent Trend Values" value={data.sentTrend.join(', ')} onChange={(v: string) => setData({...data, sentTrend: v.split(',').map(s => Number(s.trim()))})} />
-                <Input label="Opens Trend Values" value={data.opensTrend.join(', ')} onChange={(v: string) => setData({...data, opensTrend: v.split(',').map(s => Number(s.trim()))})} />
-              </div>
-              <div className="grid grid-cols-2 gap-2 border-t border-stone-800 pt-3">
-                <Input label="Total Link Clicks" type="number" value={data.linkClicksTotal} onChange={(v: string) => setData({...data, linkClicksTotal: Number(v)})} />
-                <Input label="Click Rate %" value={data.linkClickRateStr} onChange={(v: string) => setData({...data, linkClickRateStr: v})} />
-              </div>
-            </div>
-        </Section>
-
-        <Section label="20. Conversion Funnel" icon={<Filter size={14} />}>
-           <div className="grid grid-cols-3 gap-2">
-              <Input label="Funnel: Sent" type="number" value={data.funnelSent} onChange={(v: string) => setData({...data, funnelSent: Number(v)})} />
-              <Input label="Funnel: Opens" type="number" value={data.funnelOpened} onChange={(v: string) => setData({...data, funnelOpened: Number(v)})} />
-              <Input label="Funnel: Clicks" type="number" value={data.funnelClicked} onChange={(v: string) => setData({...data, funnelClicked: Number(v)})} />
-           </div>
-        </Section>
-
-        <Section label="21, 22, 23 & 24. Final Stats" icon={<TrendingUp size={14} />}>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2">
-                <Input label="Engmt: Opens" value={data.engagementOpensTrend.join(', ')} onChange={(v: string) => setData({...data, engagementOpensTrend: v.split(',').map(s => Number(s.trim()))})} />
-                <Input label="Engmt: Clicks" value={data.engagementClicksTrend.join(', ')} onChange={(v: string) => setData({...data, engagementClicksTrend: v.split(',').map(s => Number(s.trim()))})} />
-              </div>
-              <div className="grid grid-cols-3 gap-2 border-t border-stone-800 pt-3">
-                <Input label="Unsubs" type="number" value={data.unsubscribes} onChange={(v: string) => setData({...data, unsubscribes: Number(v)})} />
-                <Input label="Unsub %" value={data.unsubscribeRateStr} onChange={(v: string) => setData({...data, unsubscribeRateStr: v})} />
-                <Input label="Reply Total" type="number" value={data.repliesTotal} onChange={(v: string) => setData({...data, repliesTotal: Number(v)})} />
-              </div>
-            </div>
-        </Section>
-
-        <Section label="25. Campaign Performance Rows" icon={<BarChart3 size={14} />}>
-           <div className="space-y-4">
-              {data.campaignsPerformance.map((camp, idx) => (
-                <div key={camp.id} className="bg-stone-800 p-4 rounded-xl border border-stone-700 relative shadow-inner">
-                  <button 
-                    onClick={() => removeCampaignRow(camp.id)}
-                    className="absolute -top-3 -right-3 bg-red-600 rounded-full p-2 shadow-2xl hover:bg-red-700 transition-all z-10 border-2 border-stone-900"
-                  >
-                    <Trash2 size={12} className="text-white" />
-                  </button>
-                  <Input label="Campaign Label" value={camp.name} onChange={(v: string) => {
-                    const copy = [...data.campaignsPerformance];
-                    copy[idx].name = v;
-                    setData({...data, campaignsPerformance: copy});
-                  }} />
-                  <div className="grid grid-cols-2 gap-3 mt-3">
-                    <Input label="Total Sent" type="number" value={camp.sent} onChange={(v: string) => {
-                      const copy = [...data.campaignsPerformance];
-                      copy[idx].sent = Number(v);
-                      setData({...data, campaignsPerformance: copy});
-                    }} />
-                    <Input label="Total Opens" type="number" value={camp.opens} onChange={(v: string) => {
-                      const copy = [...data.campaignsPerformance];
-                      copy[idx].opens = Number(v);
-                      setData({...data, campaignsPerformance: copy});
-                    }} />
-                    <Input label="Open Rate %" type="number" value={camp.openRate} onChange={(v: string) => {
-                      const copy = [...data.campaignsPerformance];
-                      copy[idx].openRate = Number(v);
-                      setData({...data, campaignsPerformance: copy});
-                    }} />
-                    <Input label="Unique Opens" type="number" value={camp.uniqueOpens} onChange={(v: string) => {
-                      const copy = [...data.campaignsPerformance];
-                      copy[idx].uniqueOpens = Number(v);
-                      setData({...data, campaignsPerformance: copy});
-                    }} />
-                    <Input label="Unique Open Rate %" type="number" value={camp.uniqueOpenRate} onChange={(v: string) => {
-                      const copy = [...data.campaignsPerformance];
-                      copy[idx].uniqueOpenRate = Number(v);
-                      setData({...data, campaignsPerformance: copy});
-                    }} />
-                    <Input label="Links Clicked" type="number" value={camp.linkClicks} onChange={(v: string) => {
-                      const copy = [...data.campaignsPerformance];
-                      copy[idx].linkClicks = Number(v);
-                      setData({...data, campaignsPerformance: copy});
-                    }} />
-                    <Input label="Link Click Rate %" type="number" value={camp.linkClickRate} onChange={(v: string) => {
-                      const copy = [...data.campaignsPerformance];
-                      copy[idx].linkClickRate = Number(v);
-                      setData({...data, campaignsPerformance: copy});
-                    }} />
-                    <Input label="Unique Clicks" type="number" value={camp.uniqueClicks} onChange={(v: string) => {
-                      const copy = [...data.campaignsPerformance];
-                      copy[idx].uniqueClicks = Number(v);
-                      setData({...data, campaignsPerformance: copy});
-                    }} />
-                    <Input label="Unique Click Rate %" type="number" value={camp.uniqueClickRate} onChange={(v: string) => {
-                      const copy = [...data.campaignsPerformance];
-                      copy[idx].uniqueClickRate = Number(v);
-                      setData({...data, campaignsPerformance: copy});
-                    }} />
-                    <Input label="Hard Bounces" type="number" value={camp.hardBounces} onChange={(v: string) => {
-                      const copy = [...data.campaignsPerformance];
-                      copy[idx].hardBounces = Number(v);
-                      setData({...data, campaignsPerformance: copy});
-                    }} />
-                    <Input label="Soft Bounces" type="number" value={camp.softBounces} onChange={(v: string) => {
-                      const copy = [...data.campaignsPerformance];
-                      copy[idx].softBounces = Number(v);
-                      setData({...data, campaignsPerformance: copy});
-                    }} />
-                  </div>
+              {/* Floating Elements Layer */}
+              <div className="absolute inset-0 pointer-events-none z-[50]">
+                <div className="relative w-full h-full pointer-events-auto">
+                   {(data.floatingElements || []).map((el) => (
+                     <FloatingElementComponent 
+                       key={el.id} 
+                       element={el} 
+                       isViewer={isViewerMode}
+                       isSelected={selectedElementId === el.id}
+                       onSelect={() => handleSelectElement(el.id)}
+                       onChange={(updated) => updateElement(el.id, updated)}
+                       onRemove={() => handleDeleteElement()}
+                     />
+                   ))}
                 </div>
-              ))}
-              <button 
-                onClick={addCampaignRow}
-                className="w-full flex items-center justify-center gap-3 py-4 border-2 border-dashed border-stone-700 rounded-xl text-stone-500 hover:text-mustard hover:border-mustard hover:bg-stone-800/20 transition-all text-xs font-black uppercase tracking-tighter"
-              >
-                <Plus size={16} /> New Campaign Performance Row
-              </button>
-           </div>
-        </Section>
-
-        <div className="pt-8 pb-32 space-y-4">
-           <button onClick={handleDownloadPDF} className="w-full flex items-center justify-center gap-3 py-4 bg-stone-100 text-stone-900 rounded-xl hover:bg-white transition-all font-black uppercase tracking-tight shadow-xl group">
-             <FileText size={18} className="group-hover:text-red-600 transition-colors" /> Save as Professional PDF
-           </button>
-           <button onClick={handleDownloadHTML} className="w-full flex items-center justify-center gap-3 py-4 bg-mustard text-stone-900 rounded-xl hover:opacity-90 transition-all font-black uppercase tracking-tight shadow-xl group">
-             <Download size={18} className="group-hover:scale-110 transition-transform" /> Save as Web Format (HTML)
-           </button>
-        </div>
-        </div>
-      </aside>
-
-      {/* Main Preview Area */}
-      <main className="flex-1 overflow-y-auto px-4 pt-20 pb-40 md:py-8 md:px-12 scroll-smooth relative bg-slate-50">
-        {/* Mobile Sidebar Toggle */}
-        {!isViewerMode && (
-          <button 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="fixed bottom-6 right-6 z-50 md:hidden w-14 h-14 bg-stone-900 text-mustard rounded-full shadow-2xl flex items-center justify-center border border-stone-700"
-          >
-            {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        )}
-
-        {isLoading && (
-          <div className="fixed inset-0 bg-stone-900/20 backdrop-blur-sm z-[9999] flex items-center justify-center pointer-events-auto">
-            <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-4 text-center max-w-sm">
-              <Loader2 className="animate-spin text-mustard" size={40} />
-              <p className="font-bold text-stone-800 uppercase tracking-widest text-[10px]">{loadingMessage}</p>
-              <p className="text-[10px] text-stone-500">Please do not close this tab or scroll the page until finished.</p>
+              </div>
+              
+              {data.sections.map((section, idx) => renderSection(section, idx))}
             </div>
-          </div>
-        )}
-
-        {/* Empty state for clean viewer mode spacing */}
-        {isViewerMode && <div className="h-8" />}
-        
-        <div 
-          ref={reportRef} 
-          id="report-preview-area"
-          className="max-w-[1100px] mx-auto space-y-24 bg-[#E8B931] p-12 overflow-hidden shadow-2xl relative"
-          style={{
-            fontFamily: "'Inter', sans-serif",
-            lineHeight: '1.25'
-          } as React.CSSProperties}
-        >
-          {/* Global Floating Elements Layer */}
-          <div className="absolute inset-0 pointer-events-none z-0">
-             <div className="relative w-full h-full pointer-events-auto">
-                {(data.floatingElements || []).map((el, idx) => (
-                  <FloatingElementComponent 
-                    key={el.id} 
-                    element={el} 
-                    isViewer={isViewerMode}
-                    isSelected={selectedElementId === el.id}
-                    onSelect={() => handleSelectElement(el.id)}
-                    onChange={(updated) => {
-                      const copy = [...(data.floatingElements || [])];
-                      copy[idx] = updated;
-                      setData({...data, floatingElements: copy});
-                    }}
-                    onRemove={() => {
-                      const copy = [...(data.floatingElements || [])];
-                      copy.splice(idx, 1);
-                      setData({...data, floatingElements: copy});
-                      if (selectedElementId === el.id) handleSelectElement(null);
-                    }}
-                  />
-                ))}
-             </div>
-          </div>
-
-          {/* DYNAMIC SECTIONS */}
-          {data.sections.map((section, idx) => (
-            <React.Fragment key={section.id}>
-              {renderSection(section, idx)}
-            </React.Fragment>
-          ))}
-
         </div>
-
-        <footer className="mt-12 text-center pb-12">
-          <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">
-            app bottom show allright, reserved by Ajunaidi 2026
-          </p>
-        </footer>
-
       </main>
+    </div>
+  );
+}
+
+function PropertyBarContent({ element, onUpdate, onDelete }: { element?: FloatingElement, onUpdate: (u: Partial<FloatingElement>) => void, onDelete: () => void }) {
+  if (!element) return null;
+
+  return (
+    <div className="flex items-center gap-4 h-full">
+      {element.type === 'text' && (
+        <>
+          <div className="flex items-center gap-1 border-r pr-4 border-stone-100">
+            <button onClick={() => onUpdate({ fontSize: Math.max(8, (element.fontSize || 16) - 2) })} className="p-1.5 hover:bg-stone-50 rounded-lg text-stone-600"><Minus size={14}/></button>
+            <input 
+              type="number" 
+              value={element.fontSize || 16} 
+              onChange={(e) => onUpdate({ fontSize: parseInt(e.target.value) })}
+              className="w-10 text-center text-xs font-black bg-stone-50 rounded h-7 outline-none border-none"
+            />
+            <button onClick={() => onUpdate({ fontSize: Math.min(200, (element.fontSize || 16) + 2) })} className="p-1.5 hover:bg-stone-50 rounded-lg text-stone-600"><Plus size={14}/></button>
+          </div>
+          <div className="flex items-center gap-1 border-r pr-4 border-stone-100">
+             <button 
+               onClick={() => onUpdate({ fontWeight: element.fontWeight === 'bold' ? 'normal' : 'bold' })} 
+               className={cn("w-8 h-8 flex items-center justify-center rounded-lg transition-colors", element.fontWeight === 'bold' ? "bg-stone-900 text-white" : "hover:bg-stone-50 text-stone-600")}
+             >
+                <div className="font-serif font-black">B</div>
+             </button>
+             <button 
+               onClick={() => onUpdate({ fontStyle: element.fontStyle === 'italic' ? 'normal' : 'italic' })} 
+               className={cn("w-8 h-8 flex items-center justify-center rounded-lg transition-colors", element.fontStyle === 'italic' ? "bg-stone-900 text-white" : "hover:bg-stone-50 text-stone-600")}
+             >
+                <div className="font-serif italic font-black">I</div>
+             </button>
+             <button 
+               onClick={() => onUpdate({ textDecoration: element.textDecoration === 'underline' ? 'none' : 'underline' })} 
+               className={cn("w-8 h-8 flex items-center justify-center rounded-lg transition-colors", element.textDecoration === 'underline' ? "bg-stone-900 text-white" : "hover:bg-stone-50 text-stone-600")}
+             >
+                <div className="font-serif underline font-black">U</div>
+             </button>
+          </div>
+        </>
+      )}
+
+      <div className="flex items-center gap-2 border-r pr-4 border-stone-100">
+         <div className="w-8 h-8 rounded-lg relative overflow-hidden border border-stone-200">
+            <input 
+              type="color" 
+              value={element.color || '#000000'} 
+              onChange={(e) => onUpdate({ color: e.target.value })}
+              className="absolute inset-[-10px] w-[200%] h-[200%] cursor-pointer"
+            />
+         </div>
+         <span className="text-[10px] font-black uppercase text-stone-400">Color</span>
+      </div>
+
+      <div className="flex items-center gap-1">
+         <button onClick={onDelete} className="p-2 hover:bg-red-50 hover:text-red-500 rounded-lg text-stone-400 transition-colors">
+            <Trash2 size={16} />
+         </button>
+      </div>
     </div>
   );
 }
