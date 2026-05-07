@@ -11,7 +11,7 @@ import {
   Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile, Square, Minus, ArrowRight, Layers,
   ChevronRight, ChevronLeft, Hash,
   Monitor, Redo2, Undo2, CloudCheck, Search, Globe, Box, Grid3X3, Wand2, UploadCloud, FolderHeart, LayoutTemplate,
-  PlusSquare, Settings, Accessibility, FolderOpen, Printer, History, CloudOff
+  PlusSquare, Settings, Accessibility, FolderOpen, Printer, History, CloudOff, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import html2canvas from 'html2canvas';
@@ -20,10 +20,6 @@ import { cn } from './lib/utils';
 import { compressImage, fileToBase64 } from './lib/imageUtils';
 import { ReportData, CampaignPerformanceRow, FloatingElement } from './types';
 import { MOCK_FULL_DATA } from './mockData';
-import { ReportHeader } from './components/ReportHeader';
-import { SummarySection, MetricCardSmall } from './components/ReportSections';
-import { EmailPerformanceTable, GoalTracker } from './components/TableSections';
-import { GrowthChart, DistributionChart, FunnelDisplay } from './components/ChartSections';
 import { Line } from 'react-chartjs-2';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -46,6 +42,30 @@ import { Dashboard } from './components/Dashboard';
 const formatNumber = (val: number | undefined | null) => {
   return (val ?? 0).toLocaleString();
 };
+
+import * as pdfjsLib from 'pdfjs-dist';
+import { GoogleGenAI } from "@google/genai";
+
+// Use a CDN-hosted worker for simplicity
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+const FONT_OPTIONS = [
+  { name: 'Inter', family: "Inter" },
+  { name: 'Roboto', family: "Roboto" },
+  { name: 'Open Sans', family: "Open Sans" },
+  { name: 'Lato', family: "Lato" },
+  { name: 'Montserrat', family: "Montserrat" },
+  { name: 'Poppins', family: "Poppins" },
+  { name: 'Raleway', family: "Raleway" },
+  { name: 'Merriweather', family: "Merriweather" },
+  { name: 'Playfair Display', family: "Playfair Display" },
+  { name: 'Source Code Pro', family: "Source Code Pro" },
+  { name: 'Dancing Script', family: "Dancing Script" },
+  { name: 'Space Grotesk', family: "Space Grotesk" },
+  { name: 'Outfit', family: "Outfit" },
+  { name: 'Nunito', family: "Nunito" },
+  { name: 'Quicksand', family: "Quicksand" },
+];
 
 const ICON_MAP: Record<string, React.ReactNode> = {
   TrendingUp: <TrendingUp />,
@@ -268,11 +288,11 @@ function SectionWrapper({ children, onDuplicate, onRemove, onMoveUp, onMoveDown,
       )}
     >
       {bgImage && (
-        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden rounded-[inherit]">
-          <img src={bgImage} className="w-full h-full object-cover opacity-10" alt="" />
+        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden rounded-[inherit] flex items-center justify-center">
+          <img src={bgImage} className="w-full h-full object-contain" alt="" style={{ opacity: 1 }} />
         </div>
       )}
-      <div className="relative z-10">
+      <div className="relative z-10 w-full h-full">
         <SectionControls 
           onDuplicate={onDuplicate} 
           onRemove={onRemove} 
@@ -280,7 +300,7 @@ function SectionWrapper({ children, onDuplicate, onRemove, onMoveUp, onMoveDown,
           onMoveDown={onMoveDown}
           isFirst={isFirst}
           isLast={isLast}
-          isViewer={isViewer} 
+          isViewer={isViewer}
         />
         {children}
       </div>
@@ -646,6 +666,9 @@ export default function App() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [sidebarTab, setSidebarTab] = useState<'design' | 'elements' | 'text' | 'uploads' | 'pages' | 'export' | 'inspector' | 'brand' | 'tools' | 'apps'>('design');
+  const [toolSubView, setToolSubView] = useState<'main' | 'magic' | 'resize' | 'styles'>('main');
+  const [magicPrompt, setMagicPrompt] = useState('');
+  const [magicLoading, setMagicLoading] = useState(false);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -748,6 +771,76 @@ export default function App() {
       setUnsplashError(err instanceof Error ? err.message : 'Failed to search photos');
     } finally {
       setIsSearchingPhotos(false);
+    }
+  };
+
+  const handleMagicGenerate = async () => {
+    if (!magicPrompt.trim()) return;
+    setMagicLoading(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [`You are an image search expert. Given the following image description, generate a single, highly effective search keyword for Unsplash to find a matching photo. Description: "${magicPrompt}". Output only the keyword.`]
+      });
+      
+      const keyword = (response.text || "").trim();
+      
+      // Now search unsplash with this keyword
+      const accessKey = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
+      if (accessKey) {
+        const response = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(keyword)}&per_page=1`, {
+          headers: { Authorization: `Client-ID ${accessKey}` }
+        });
+        const searchData = await response.json();
+        if (searchData.results && searchData.results.length > 0) {
+          const imgUrl = searchData.results[0].urls.regular;
+          const newEl: FloatingElement = {
+            id: `magic-${Date.now()}`,
+            type: 'image',
+            content: imgUrl,
+            top: 200,
+            left: 200,
+            width: 400,
+            height: 400,
+            zIndex: 10,
+            opacity: 1,
+            rotation: 0,
+            borderRadius: 24,
+            shadow: true
+          };
+          setData(prev => ({ ...prev, floatingElements: [...prev.floatingElements, newEl] }));
+          setMagicPrompt('');
+          setToolSubView('main');
+          return;
+        }
+      }
+      
+      // Fallback to picsum if no unsplash key or no results
+      const newElFallback: FloatingElement = {
+        id: `magic-${Date.now()}`,
+        type: 'image',
+        content: `https://picsum.photos/seed/${encodeURIComponent(keyword || magicPrompt)}/1200/1200`,
+        top: 200,
+        left: 200,
+        width: 400,
+        height: 400,
+        zIndex: 10,
+        opacity: 1,
+        rotation: 0,
+        borderRadius: 24,
+        shadow: true
+      };
+      setData(prev => ({ ...prev, floatingElements: [...prev.floatingElements, newElFallback] }));
+      setMagicPrompt('');
+      setToolSubView('main');
+      
+    } catch (err) {
+      console.error('Magic generate failed:', err);
+      alert('AI Generation encountered an error. Falling back to basic search.');
+    } finally {
+      setMagicLoading(false);
     }
   };
 
@@ -1066,12 +1159,98 @@ export default function App() {
       pageSize,
       orientation,
       sections: [
-        { id: `sec-cover-${Date.now()}`, type: 'cover' },
-        { id: `sec-metrics-${Date.now()}`, type: 'metrics_overview' }
+        { id: `sec-blank-${Date.now()}`, type: 'blank' }
       ]
     });
     setReportId(null);
     setView('editor');
+  };
+
+  useEffect(() => {
+    if (data.fontFamily && !['sans', 'serif', 'mono'].includes(data.fontFamily)) {
+      const linkId = 'google-font-style';
+      let link = document.getElementById(linkId) as HTMLLinkElement;
+      if (!link) {
+        link = document.createElement('link');
+        link.id = linkId;
+        link.rel = 'stylesheet';
+        document.head.appendChild(link);
+      }
+      link.href = `https://fonts.googleapis.com/css2?family=${data.fontFamily.replace(/ /g, '+')}:wght@400;700;900&display=swap`;
+    }
+  }, [data.fontFamily]);
+
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsLoading(true);
+    setLoadingMessage("Importing PDF...");
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const newSections = [];
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) continue;
+
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        await page.render({ 
+          canvasContext: context, 
+          viewport: viewport,
+          // @ts-ignore
+          canvas: canvas 
+        }).promise;
+        const imgData = canvas.toDataURL('image/png');
+        
+        newSections.push({
+          id: `pdf-page-${Date.now()}-${i}`,
+          type: 'blank' as const,
+          bgImage: imgData
+        });
+      }
+
+      setData(prev => ({
+        ...prev,
+        sections: [...prev.sections, ...newSections]
+      }));
+    } catch (err) {
+      console.error("PDF preview error:", err);
+      alert("Failed to load PDF. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSvgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const base64 = await fileToBase64(file);
+    
+    const newEl: FloatingElement = {
+      id: `svg-${Date.now()}`,
+      type: 'image',
+      content: base64,
+      top: 100,
+      left: 100,
+      width: 200,
+      height: 200,
+      zIndex: 10,
+      opacity: 1,
+      rotation: 0
+    };
+    
+    setData(prev => ({
+      ...prev,
+      floatingElements: [...prev.floatingElements, newEl]
+    }));
   };
 
   const handleSelectReport = (id: string) => {
@@ -1122,24 +1301,49 @@ export default function App() {
       </section>
 
       <section className="space-y-4">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Typography Pairing</h3>
-        <div className="space-y-2">
-          {[
-            { name: 'Modern Sans', family: 'sans' },
-            { name: 'Classic Serif', family: 'serif' },
-            { name: 'Technical Mono', family: 'mono' },
-          ].map((font) => (
-             <button 
-               key={font.family}
-               onClick={() => setData({ ...data, fontFamily: font.family as any })}
-               className={cn(
-                 "w-full text-left p-4 rounded-2xl border transition-all",
-                 data.fontFamily === font.family ? "bg-mustard border-mustard text-stone-900" : "bg-stone-50 border-stone-100 text-stone-600 hover:border-mustard"
-               )}
-             >
-               <span className="text-xs font-black uppercase tracking-widest">{font.name}</span>
-             </button>
-          ))}
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Typography Tuning</h3>
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={14} />
+            <input 
+              type="text" 
+              placeholder="Search Google Font..." 
+              className="w-full pl-10 pr-4 py-2 bg-stone-50 border border-stone-100 rounded-xl text-[10px] font-black uppercase focus:ring-2 focus:ring-mustard/20 focus:outline-none"
+              value={data.fontFamily && !['sans', 'serif', 'mono'].includes(data.fontFamily) ? data.fontFamily : ''}
+              onChange={(e) => setData({ ...data, fontFamily: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2 scrollbar-thumb-stone-200 scrollbar-track-transparent">
+            {FONT_OPTIONS.filter(f => f.name.toLowerCase().includes((data.fontFamily || '').toLowerCase())).map((font) => (
+               <button 
+                key={font.name}
+                onClick={() => setData({ ...data, fontFamily: font.family })}
+                className={cn(
+                  "p-3 rounded-xl border transition-all text-left group",
+                  data.fontFamily === font.family ? "border-mustard bg-mustard/5" : "border-stone-50 hover:border-stone-200"
+                )}
+                style={{ fontFamily: font.family }}
+              >
+                <div className="text-xs font-black truncate">{font.name}</div>
+                <div className="text-[8px] opacity-40 uppercase truncate">The quick brown fox</div>
+              </button>
+            ))}
+          </div>
+          
+          <div className="flex gap-2 border-t pt-4 border-stone-50">
+            {['sans', 'serif', 'mono'].map(sys => (
+              <button 
+                key={sys}
+                onClick={() => setData({ ...data, fontFamily: sys })}
+                className={cn(
+                  "flex-1 py-2 rounded-lg text-[9px] font-black uppercase border transition-all",
+                  data.fontFamily === sys ? "bg-stone-900 text-white border-stone-900" : "bg-stone-50 text-stone-400 border-stone-100 hover:border-stone-200"
+                )}
+              >
+                {sys}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
     </div>
@@ -1374,27 +1578,42 @@ export default function App() {
     </div>
   );
 
-  const renderUploadsTab = () => (
+   const renderUploadsTab = () => (
     <div className="space-y-8">
-      <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-stone-100 rounded-[32px] bg-stone-50 hover:bg-stone-100 transition-all group">
-         <div className="w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center text-stone-300 group-hover:text-mustard transition-colors mb-6">
-            <UploadCloud size={32} />
-         </div>
-         <h3 className="text-sm font-black uppercase text-stone-900 mb-2">Upload Files</h3>
-         <p className="text-[10px] text-stone-500 font-medium text-center mb-6 px-4">Upload images to use them in your designs.</p>
-         <label className="px-6 h-12 bg-stone-900 text-white rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all cursor-pointer">
-            {isUploading ? (
-              <>
-                <Loader2 size={14} className="animate-spin" />
-                Uploading...
-              </>
-            ) : (
-              <>
-                Select Files
-                <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
-              </>
-            )}
-         </label>
+      <div className="grid grid-cols-1 gap-4">
+        <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-stone-100 rounded-[32px] bg-stone-50 hover:bg-stone-100 transition-all group">
+           <div className="w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center text-stone-300 group-hover:text-mustard transition-colors mb-6">
+              <UploadCloud size={32} />
+           </div>
+           <h3 className="text-sm font-black uppercase text-stone-900 mb-2">Upload Files</h3>
+           <p className="text-[10px] text-stone-500 font-medium text-center mb-6 px-4">Upload images to use them in your designs.</p>
+           <label className="px-6 h-12 bg-stone-900 text-white rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all cursor-pointer">
+              {isUploading ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  Images
+                  <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                </>
+              )}
+           </label>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <label className="p-4 bg-white border border-stone-100 rounded-2xl flex flex-col items-center justify-center gap-3 hover:border-mustard transition-all cursor-pointer shadow-sm">
+            <FileText size={24} className="text-red-500" />
+            <span className="text-[10px] font-black uppercase">Import PDF</span>
+            <input type="file" className="hidden" accept=".pdf" onChange={handlePdfUpload} />
+          </label>
+          <label className="p-4 bg-white border border-stone-100 rounded-2xl flex flex-col items-center justify-center gap-3 hover:border-mustard transition-all cursor-pointer shadow-sm">
+            <Chrome size={24} className="text-blue-500" />
+            <span className="text-[10px] font-black uppercase">Import SVG</span>
+            <input type="file" className="hidden" accept=".svg" onChange={handleSvgUpload} />
+          </label>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 min-h-[100px]">
@@ -1601,6 +1820,161 @@ export default function App() {
     );
   };
 
+  const renderToolsTab = () => {
+    if (toolSubView === 'magic') {
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 mb-4">
+            <button onClick={() => setToolSubView('main')} className="p-2 hover:bg-stone-100 rounded-full transition-colors">
+              <ChevronLeft size={20} />
+            </button>
+            <h3 className="text-sm font-black uppercase text-stone-900">Magic Media</h3>
+          </div>
+          <div className="space-y-4">
+             <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-6 rounded-3xl text-white">
+                <Wand2 size={32} className="mb-4" />
+                <h4 className="text-sm font-bold mb-2">AI Image Generator</h4>
+                <p className="text-[10px] opacity-80 leading-relaxed">Turn your ideas into unique images for your reports instantly.</p>
+             </div>
+             <div className="space-y-2">
+                <textarea 
+                  value={magicPrompt}
+                  onChange={(e) => setMagicPrompt(e.target.value)}
+                  placeholder="Describe the image you want to create..."
+                  className="w-full h-32 p-4 bg-stone-50 border border-stone-100 rounded-2xl text-[11px] focus:ring-2 focus:ring-purple-500/20 focus:outline-none resize-none"
+                  disabled={magicLoading}
+                />
+                <button 
+                  onClick={handleMagicGenerate}
+                  disabled={magicLoading || !magicPrompt.trim()}
+                  className="w-full h-12 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                   {magicLoading ? (
+                     <>
+                        <Loader2 size={14} className="animate-spin" />
+                        Imagining...
+                     </>
+                   ) : (
+                     <>
+                        <Sparkles size={14} />
+                        Generate Image
+                     </>
+                   )}
+                </button>
+             </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (toolSubView === 'resize') {
+      const sizes: ('A1' | 'A2' | 'A3' | 'A4' | 'A5')[] = ['A1', 'A2', 'A3', 'A4', 'A5'];
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 mb-4">
+            <button onClick={() => setToolSubView('main')} className="p-2 hover:bg-stone-100 rounded-full transition-colors">
+              <ChevronLeft size={20} />
+            </button>
+            <h3 className="text-sm font-black uppercase text-stone-900">Resize Report</h3>
+          </div>
+          <div className="space-y-8">
+            <div className="space-y-3">
+              <span className="text-[10px] font-black uppercase text-stone-400">Page Size</span>
+              <div className="grid grid-cols-5 gap-2">
+                {sizes.map(s => (
+                  <button 
+                    key={s}
+                    onClick={() => setData({ ...data, pageSize: s })}
+                    className={cn(
+                      "h-10 rounded-lg text-[10px] font-black uppercase transition-all border",
+                      data.pageSize === s ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-100 hover:border-stone-300"
+                    )}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <span className="text-[10px] font-black uppercase text-stone-400">Orientation</span>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={() => setData({ ...data, orientation: 'portrait' })}
+                  className={cn(
+                    "h-12 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all border",
+                    data.orientation === 'portrait' ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-100 hover:border-stone-300"
+                  )}
+                >
+                  <div className="w-3 h-4 border-2 border-current rounded-sm" />
+                  Portrait
+                </button>
+                <button 
+                  onClick={() => setData({ ...data, orientation: 'landscape' })}
+                  className={cn(
+                    "h-12 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all border",
+                    data.orientation === 'landscape' ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-100 hover:border-stone-300"
+                  )}
+                >
+                  <div className="w-4 h-3 border-2 border-current rounded-sm" />
+                  Landscape
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (toolSubView === 'styles') {
+      const palettes = [
+        { name: 'Modern Dark', theme: '#EBB33D', accent: '#1a1a1a', card: '#ffffff', text: '#1a1a1a' },
+        { name: 'Nordic Clean', theme: '#88abff', accent: '#2e3440', card: '#ffffff', text: '#2e3440' },
+        { name: 'Vibrant Pop', theme: '#ff3e00', accent: '#000000', card: '#ffffff', text: '#000000' },
+        { name: 'Cyberpunk', theme: '#f0f', accent: '#000', card: '#111', text: '#0ff' },
+        { name: 'Eco Soft', theme: '#22c55e', accent: '#064e3b', card: '#f0fdf4', text: '#064e3b' },
+      ];
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 mb-4">
+            <button onClick={() => setToolSubView('main')} className="p-2 hover:bg-stone-100 rounded-full transition-colors">
+              <ChevronLeft size={20} />
+            </button>
+            <h3 className="text-sm font-black uppercase text-stone-900">Styles & Themes</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-3">
+             {palettes.map(p => (
+               <button 
+                 key={p.name}
+                 onClick={() => setData({ ...data, themeColor: p.theme, accentColor: p.accent, cardColor: p.card, textColor: p.text })}
+                 className="p-4 bg-white border border-stone-100 rounded-2xl hover:border-mustard transition-all group flex items-center justify-between"
+               >
+                  <div className="text-left">
+                    <span className="text-[10px] font-black uppercase block mb-2">{p.name}</span>
+                    <div className="flex gap-1">
+                       <div className="w-4 h-4 rounded-full" style={{ backgroundColor: p.theme }} />
+                       <div className="w-4 h-4 rounded-full" style={{ backgroundColor: p.accent }} />
+                       <div className="w-4 h-4 rounded-full" style={{ backgroundColor: p.card }} />
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-stone-300 group-hover:text-mustard transition-colors" />
+               </button>
+             ))}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-2 gap-3">
+         <ToolButton icon={<Wand2 size={24}/>} label="Magic Media" onClick={() => setToolSubView('magic')} />
+         <ToolButton icon={<Maximize2 size={24}/>} label="Resize" onClick={() => setToolSubView('resize')} />
+         <ToolButton icon={<Palette size={24}/>} label="Styles" onClick={() => setToolSubView('styles')} />
+      </div>
+    );
+  };
+
   const renderExportTab = () => (
     <div className="space-y-6">
       <div className="p-4 bg-mustard/5 rounded-2xl border border-mustard/10 space-y-3 shadow-inner shadow-mustard/5">
@@ -1718,7 +2092,7 @@ export default function App() {
       case 'cover':
         return (
           <SectionWrapper key={section.id} id={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-32 flex flex-col relative overflow-hidden" style={containerStyle}>
+            <div className="min-h-[750px] p-24 md:p-40 flex flex-col relative overflow-hidden" style={containerStyle}>
               {/* Road Path SVG overlay */}
               <div className="absolute right-0 top-0 w-1/2 h-full pointer-events-none opacity-20">
                  <svg viewBox="0 0 400 800" className="w-full h-full fill-none stroke-black stroke-[40] stroke-dasharray-[20,20]">
@@ -1780,7 +2154,7 @@ export default function App() {
       case 'metrics_overview':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-32 flex flex-col justify-center relative overflow-hidden" style={containerStyle}>
+            <div className="min-h-[750px] p-24 md:p-40 flex flex-col justify-center relative overflow-hidden" style={containerStyle}>
                 <div className="absolute right-0 top-0 w-64 h-full pointer-events-none opacity-10">
                    <svg viewBox="0 0 100 400" className="w-full h-full fill-none stroke-black stroke-[20] stroke-dasharray-[10,10]">
                       <path d="M100,0 C100,100 0,100 0,200 C0,300 100,300 100,400" />
@@ -1814,7 +2188,7 @@ export default function App() {
       case 'report_main':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-32 flex flex-col gap-12 relative overflow-hidden" style={containerStyle}>
+            <div className="min-h-[750px] p-24 md:p-40 flex flex-col gap-12 relative overflow-hidden" style={containerStyle}>
                 <div className="flex justify-between items-end">
                    <div>
                       <p className="text-2xl font-bold opacity-80 uppercase tracking-widest leading-none mb-2">
@@ -1896,7 +2270,7 @@ export default function App() {
       case 'distribution':
         return (
           <SectionWrapper key={section.id} {...commonProps} style={containerStyle}>
-            <div className="min-h-[750px] p-24 md:p-32 space-y-12 flex flex-col">
+            <div className="min-h-[750px] p-24 md:p-40 space-y-12 flex flex-col">
                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
                    {[
                      { label: "Contact Count", key: 'contactCount', val: data.contactCount, icon: <Users size={28}/>, accent: '#ef4444' },
@@ -1962,7 +2336,7 @@ export default function App() {
       case 'engagement':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="space-y-12">
+            <div className="min-h-[750px] p-24 md:p-40 space-y-12 flex flex-col" style={containerStyle}>
                <BentoCard className="overflow-hidden">
                   <div className="flex justify-between items-center mb-8 border-b pb-4 gap-4">
                      <h3 className="text-xl md:text-2xl font-black uppercase tracking-tighter truncate">
@@ -2041,7 +2415,7 @@ export default function App() {
       case 'grid_metrics':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-16 md:p-24 flex flex-col gap-12" style={containerStyle}>
+            <div className="min-h-[750px] p-24 md:p-40 flex flex-col gap-12" style={containerStyle}>
                 <div className="flex justify-between items-center">
                    <h2 className="text-5xl font-black uppercase tracking-tighter italic">Grid Metrics</h2>
                    <div className="bg-stone-900 text-white px-6 py-2 rounded-full font-black text-sm uppercase italic">Data View</div>
@@ -2093,7 +2467,7 @@ export default function App() {
       case 'trends_opens':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-16 md:p-24 flex flex-col gap-12" style={containerStyle}>
+            <div className="min-h-[750px] p-24 md:p-40 flex flex-col gap-12" style={containerStyle}>
                 <div className="flex justify-between items-center">
                    <h2 className="text-5xl font-black uppercase tracking-tighter italic">Trends Opens</h2>
                    <div className="flex items-center gap-4">
@@ -2164,7 +2538,7 @@ export default function App() {
       case 'funnel':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-16 md:p-24 flex flex-col gap-12" style={containerStyle}>
+            <div className="min-h-[750px] p-24 md:p-40 flex flex-col gap-12" style={containerStyle}>
                 <div className="flex justify-between items-center px-4">
                    <h2 className="text-5xl font-black uppercase tracking-tighter italic">Funnel Distribution</h2>
                    <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-300">
@@ -2212,7 +2586,7 @@ export default function App() {
       case 'performance':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-16 md:p-24 flex flex-col gap-12" style={containerStyle}>
+            <div className="min-h-[750px] p-24 md:p-40 flex flex-col gap-12" style={containerStyle}>
                 <div className="flex justify-between items-center px-4">
                    <h2 className="text-5xl font-black uppercase tracking-tighter italic">Performance</h2>
                    <div className="bg-red-500 text-white px-6 py-2 rounded-full font-black text-sm uppercase italic">Live Metrics</div>
@@ -2269,10 +2643,22 @@ export default function App() {
             </div>
           </SectionWrapper>
         );
+      case 'blank':
+        return (
+          <SectionWrapper key={section.id} {...commonProps}>
+            <div className="min-h-[750px] p-24 md:p-40 flex flex-col items-center justify-center relative overflow-hidden" style={containerStyle}>
+                {!section.bgImage && (
+                  <div className="text-stone-200 uppercase font-black tracking-[0.5em] text-xs animate-pulse">
+                    Empty Canvas
+                  </div>
+                )}
+            </div>
+          </SectionWrapper>
+        );
       case 'thanks':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] flex flex-col items-center justify-center relative overflow-hidden" style={containerStyle}>
+            <div className="min-h-[750px] p-24 md:p-40 flex flex-col items-center justify-center relative overflow-hidden" style={containerStyle}>
                 <div className="absolute inset-0 opacity-10 pointer-events-none">
                    <svg viewBox="0 0 100 100" className="w-full h-full fill-none stroke-black stroke-[0.1] stroke-dasharray-[1,1]">
                       <path d="M0,50 Q25,25 50,50 T100,50" />
@@ -2281,7 +2667,7 @@ export default function App() {
                    </svg>
                 </div>
 
-                <div className="text-center z-10 max-w-4xl px-16 md:px-24">
+                <div className="text-center z-10 max-w-4xl">
                    <h2 className="text-[150px] font-black leading-none tracking-tighter uppercase mb-12">
                       <EditableTextArea 
                         value={data.thanksTitle || "PERFORMANCE\nREPORT"} 
@@ -2315,7 +2701,7 @@ export default function App() {
       case 'metrics':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-32 flex flex-col justify-center" style={containerStyle}>
+            <div className="min-h-[750px] p-24 md:p-40 flex flex-col justify-center" style={containerStyle}>
                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
                {[
                  { label: data.metricsLabels?.[0] || "Total Emails Sent", val: 2871, icon: <Users/>, sub: "Contact Count" },
@@ -2363,7 +2749,7 @@ export default function App() {
       case 'table':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-32 flex flex-col justify-center" style={containerStyle}>
+            <div className="min-h-[750px] p-24 md:p-40 flex flex-col justify-center" style={containerStyle}>
                <BentoCard className="overflow-hidden">
                 <h3 className="text-2xl md:text-3xl font-black uppercase mb-12 truncate">
                   <EditableText 
@@ -2436,7 +2822,7 @@ export default function App() {
       case 'footer':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-32 flex flex-col justify-center relative overflow-hidden" style={containerStyle}>
+            <div className="min-h-[750px] p-24 md:p-40 flex flex-col justify-center relative overflow-hidden" style={containerStyle}>
                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-24 items-center">
                   <div className="z-10">
                      <h2 className="text-[100px] md:text-[180px] font-black leading-[0.7] tracking-tighter text-stone-950 mb-12 select-none" style={{ fontFamily: "'Dancing Script', cursive" }}>
@@ -3186,13 +3572,7 @@ export default function App() {
                     <p className="text-[10px] text-stone-500 font-medium leading-relaxed">Centralize your colors, logos, and fonts for consistent designs.</p>
                   </div>
                 )}
-                {sidebarTab === 'tools' && (
-                   <div className="grid grid-cols-2 gap-3">
-                      <ToolButton icon={<Wand2 size={24}/>} label="Magic Media" onClick={() => {}} />
-                      <ToolButton icon={<Maximize2 size={24}/>} label="Resize" onClick={() => {}} />
-                      <ToolButton icon={<Palette size={24}/>} label="Styles" onClick={() => setSidebarTab('design')} />
-                   </div>
-                )}
+                {sidebarTab === 'tools' && renderToolsTab()}
                 {sidebarTab === 'apps' && (
                   <div className="flex flex-col items-center justify-center pt-20 text-center px-6">
                     <div className="w-16 h-16 bg-stone-50 rounded-full flex items-center justify-center text-stone-200 mb-4">

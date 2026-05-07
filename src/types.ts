@@ -150,7 +150,7 @@ export interface ReportData {
   h3Color: string;
   h4Color?: string;
   descColor: string;
-  fontFamily: 'sans' | 'serif' | 'mono';
+  fontFamily: string;
   borderRadius: 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full';
 
   // Section Labels & Titles
@@ -172,5 +172,5 @@ export interface ReportData {
   thanksTitle?: string;
   thanksBody?: string;
 
-  sections: { id: string, type: 'cover' | 'overview' | 'goals' | 'growth' | 'deals' | 'metrics' | 'trends' | 'funnel' | 'table' | 'footer' | 'metrics_overview' | 'report_main' | 'distribution' | 'engagement' | 'grid_metrics' | 'trends_opens' | 'performance' | 'thanks', bgImage?: string }[];
+  sections: { id: string, type: 'cover' | 'overview' | 'goals' | 'growth' | 'deals' | 'metrics' | 'trends' | 'funnel' | 'table' | 'footer' | 'metrics_overview' | 'report_main' | 'distribution' | 'engagement' | 'grid_metrics' | 'trends_opens' | 'performance' | 'thanks' | 'blank', bgImage?: string }[];
 }
