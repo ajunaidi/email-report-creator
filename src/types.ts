@@ -172,5 +172,19 @@ export interface ReportData {
   thanksTitle?: string;
   thanksBody?: string;
 
+  templateStyles?: Record<string, {
+    left?: number;
+    top?: number;
+    width?: number;
+    height?: number;
+    rotation?: number;
+    fontSize?: number;
+    color?: string;
+    textAlign?: 'left' | 'center' | 'right';
+    opacity?: number;
+    fontWeight?: string;
+    fontFamily?: string;
+  }>;
+
   sections: { id: string, type: 'cover' | 'overview' | 'goals' | 'growth' | 'deals' | 'metrics' | 'trends' | 'funnel' | 'table' | 'footer' | 'metrics_overview' | 'report_main' | 'distribution' | 'engagement' | 'grid_metrics' | 'trends_opens' | 'performance' | 'thanks' | 'blank', bgImage?: string }[];
 }

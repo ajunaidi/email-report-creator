@@ -6,11 +6,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   BarChart3, Users, Mail, TrendingUp, MousePointerClick, 
-  LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image, Type, Maximize2, FileText, Info,
+  LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image, Type, Maximize2, FileText, Info, RotateCcw,
   Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash, PieChart as PieChartIcon, ChevronUp, ChevronDown, LayoutDashboard, Chrome,
   Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile, Square, Minus, ArrowRight, Layers,
   ChevronRight, ChevronLeft, Hash,
-  Monitor, Redo2, Undo2, CloudCheck, Search, Globe, Box, Grid3X3, Wand2, UploadCloud, FolderHeart, LayoutTemplate,
+  Monitor, Redo2, Undo2, CloudCheck, Search, Globe, Box, Grid3X3, Wand2, UploadCloud, FolderHeart, LayoutTemplate, Cpu, Minimize,
   PlusSquare, Settings, Accessibility, FolderOpen, Printer, History, CloudOff, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -65,7 +65,35 @@ const FONT_OPTIONS = [
   { name: 'Outfit', family: "Outfit" },
   { name: 'Nunito', family: "Nunito" },
   { name: 'Quicksand', family: "Quicksand" },
+  { name: 'Oswald', family: "Oswald" },
+  { name: 'Bebas Neue', family: "Bebas Neue" },
+  { name: 'Libre Baskerville', family: "Libre Baskerville" },
+  { name: 'Pacifico', family: "Pacifico" },
+  { name: 'Shadows Into Light', family: "Shadows Into Light" },
+  { name: 'Caveat', family: "Caveat" },
+  { name: 'Permanent Marker', family: "Permanent Marker" },
+  { name: 'Indie Flower', family: "Indie Flower" },
+  { name: 'Amatic SC', family: "Amatic SC" },
+  { name: 'Teko', family: "Teko" },
+  { name: 'Cinzel', family: "Cinzel" },
+  { name: 'Zilla Slab', family: "Zilla Slab" },
+  { name: 'Alfa Slab One', family: "Alfa Slab One" },
+  { name: 'Righteous', family: "Righteous" },
+  { name: 'Comfortaa', family: "Comfortaa" },
+  { name: 'Fredoka One', family: "Fredoka One" },
 ];
+
+interface TemplateStyle {
+  left?: number;
+  top?: number;
+  width?: number;
+  height?: number;
+  rotation?: number;
+  fontSize?: number;
+  color?: string;
+  textAlign?: 'left' | 'center' | 'right';
+  opacity?: number;
+}
 
 const ICON_MAP: Record<string, React.ReactNode> = {
   TrendingUp: <TrendingUp />,
@@ -86,7 +114,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 
 // --- Editable Components ---
 
-function EditableText({ value, onChange, className, isViewer }: { value: string, onChange: (v: string) => void, className?: string, isViewer?: boolean }) {
+function EditableText({ value, onChange, className, isViewer, onSelect, isSelected }: { value: string, onChange: (v: string) => void, className?: string, isViewer?: boolean, onSelect?: () => void, isSelected?: boolean }) {
   const [isEditing, setIsEditing] = useState(false);
   const [val, setVal] = useState(value);
 
@@ -109,15 +137,19 @@ function EditableText({ value, onChange, className, isViewer }: { value: string,
 
   return (
     <span 
-      onClick={() => setIsEditing(true)} 
-      className={cn("cursor-pointer hover:bg-black/5 rounded transition-colors", className)}
+      onClick={(e) => { e.stopPropagation(); onSelect?.(); setIsEditing(true); }} 
+      className={cn(
+        "cursor-pointer hover:bg-black/5 rounded transition-colors relative", 
+        isSelected && "ring-2 ring-mustard ring-offset-2",
+        className
+      )}
     >
       {value || <span className="opacity-30 italic">Click to edit</span>}
     </span>
   );
 }
 
-function EditableTextArea({ value, onChange, className, isViewer }: { value: string, onChange: (v: string) => void, className?: string, isViewer?: boolean }) {
+function EditableTextArea({ value, onChange, className, isViewer, onSelect, isSelected }: { value: string, onChange: (v: string) => void, className?: string, isViewer?: boolean, onSelect?: () => void, isSelected?: boolean }) {
   const [isEditing, setIsEditing] = useState(false);
   const [val, setVal] = useState(value);
 
@@ -139,8 +171,12 @@ function EditableTextArea({ value, onChange, className, isViewer }: { value: str
 
   return (
     <span 
-      onClick={() => setIsEditing(true)} 
-      className={cn("cursor-pointer hover:bg-black/5 rounded block", className)}
+      onClick={(e) => { e.stopPropagation(); onSelect?.(); setIsEditing(true); }} 
+      className={cn(
+        "cursor-pointer hover:bg-black/5 rounded block relative", 
+        isSelected && "ring-2 ring-mustard ring-offset-2",
+        className
+      )}
     >
       {value || <span className="opacity-30 italic">Click to edit</span>}
     </span>
@@ -179,7 +215,7 @@ function EditableNumber({ value, onChange, className, prefix = '', suffix = '', 
   );
 }
 
-function ClickableImage({ src, onUpload, className, isViewer }: { src?: string, onUpload: (url: string) => void, className?: string, isViewer?: boolean }) {
+function ClickableImage({ src, onUpload, className, isViewer, onSelect, isSelected }: { src?: string, onUpload: (url: string) => void, className?: string, isViewer?: boolean, onSelect?: () => void, isSelected?: boolean }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [localLoading, setLocalLoading] = useState(false);
 
@@ -208,8 +244,12 @@ function ClickableImage({ src, onUpload, className, isViewer }: { src?: string, 
 
   return (
     <div 
-      onClick={() => !localLoading && fileInputRef.current?.click()} 
-      className={cn("relative group cursor-pointer overflow-hidden", className)}
+      onClick={(e) => { e.stopPropagation(); onSelect?.(); if (!localLoading) fileInputRef.current?.click(); }} 
+      className={cn(
+        "relative group cursor-pointer overflow-hidden transition-all", 
+        isSelected && "ring-4 ring-mustard ring-offset-4 z-20",
+        className
+      )}
     >
       {localLoading ? (
         <div className="w-full h-full bg-stone-50 flex flex-col items-center justify-center gap-2">
@@ -308,11 +348,31 @@ function SectionWrapper({ children, onDuplicate, onRemove, onMoveUp, onMoveDown,
   );
 }
 
-function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSelected, isViewer }: { element: FloatingElement, onChange: (el: FloatingElement) => void, onRemove: () => void, onSelect: () => void, isSelected: boolean, isViewer?: boolean }) {
+function TemplateTransformWrapper({ 
+  id, 
+  children, 
+  data, 
+  updateStyle, 
+  isSelected, 
+  onSelect, 
+  isViewer,
+  className
+}: { 
+  id: string, 
+  children: React.ReactNode, 
+  data: ReportData, 
+  updateStyle: (updates: Partial<TemplateStyle>) => void, 
+  isSelected: boolean, 
+  onSelect: () => void, 
+  isViewer?: boolean,
+  className?: string
+}) {
+  const style = data.templateStyles?.[id] || {};
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [isRotating, setIsRotating] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
-  const [startSize, setStartSize] = useState({ w: 0, h: 0 });
+  const [initialData, setInitialData] = useState({ left: 0, top: 0, width: 0, height: 0, rotation: 0 });
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (isViewer) return;
@@ -320,13 +380,193 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
     onSelect();
     setIsDragging(true);
     setStartPos({ x: e.clientX, y: e.clientY });
+    setInitialData({ 
+      left: style.left || 0, 
+      top: style.top || 0, 
+      width: style.width || 0, 
+      height: style.height || 0, 
+      rotation: style.rotation || 0 
+    });
   };
 
   const handleResizeStart = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsResizing(true);
     setStartPos({ x: e.clientX, y: e.clientY });
-    setStartSize({ w: element.width, h: element.height });
+    setInitialData({ 
+      left: style.left || 0, 
+      top: style.top || 0, 
+      width: style.width || 0, 
+      height: style.height || 0, 
+      rotation: style.rotation || 0 
+    });
+  };
+
+  const handleRotateStart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsRotating(true);
+    setStartPos({ x: e.clientX, y: e.clientY });
+    setInitialData({ 
+      left: style.left || 0, 
+      top: style.top || 0, 
+      width: style.width || 0, 
+      height: style.height || 0, 
+      rotation: style.rotation || 0 
+    });
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        const dx = e.clientX - startPos.x;
+        const dy = e.clientY - startPos.y;
+        updateStyle({
+          left: initialData.left + dx,
+          top: initialData.top + dy
+        });
+      } else if (isResizing) {
+        const dx = e.clientX - startPos.x;
+        const dy = e.clientY - startPos.y;
+        updateStyle({
+          width: Math.max(20, initialData.width + dx),
+          height: Math.max(20, initialData.height + dy)
+        });
+      } else if (isRotating) {
+        const dx = e.clientX - startPos.x;
+        updateStyle({
+          rotation: initialData.rotation + (dx / 2)
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      setIsResizing(false);
+      setIsRotating(false);
+    };
+
+    if (isDragging || isResizing || isRotating) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, isResizing, isRotating, startPos, initialData, updateStyle]);
+
+  // If no style overrides exist, just render children (normal flow)
+  // But if the user starts moving it, it becomes "detached"
+  const hasTransform = style.left !== undefined || style.top !== undefined || style.width !== undefined || style.height !== undefined || style.rotation !== undefined;
+
+  return (
+    <div 
+      onMouseDown={handleMouseDown}
+      className={cn(
+        "relative group/template-el transition-all",
+        hasTransform && "absolute",
+        isSelected && !isViewer && "z-50 ring-2 ring-sky-400 ring-offset-2 rounded-sm",
+        className
+      )}
+      style={{
+        left: style.left !== undefined ? `${style.left}px` : undefined,
+        top: style.top !== undefined ? `${style.top}px` : undefined,
+        width: style.width !== undefined ? `${style.width}px` : undefined,
+        height: style.height !== undefined ? `${style.height}px` : undefined,
+        transform: style.rotation ? `rotate(${style.rotation}deg)` : undefined,
+        opacity: style.opacity ?? 1,
+        zIndex: isSelected ? 50 : undefined
+      }}
+    >
+      <div className={cn("w-full h-full", isSelected && !isViewer && "relative")}>
+        {children}
+        
+        {isSelected && !isViewer && (
+          <>
+            {/* Canva-style Corner Dots */}
+            <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-sky-400 rounded-full z-[60]" />
+            <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-sky-400 rounded-full z-[60]" />
+            <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-sky-400 rounded-full z-[60]" />
+            
+            {/* Resize Handle */}
+            <div 
+              className="absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-sky-400 border-2 border-white rounded-full cursor-nwse-resize shadow-lg z-[70] flex items-center justify-center hover:scale-125 transition-transform"
+              onMouseDown={handleResizeStart}
+            />
+
+            {/* Rotate Handle */}
+            <div 
+              className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-6 h-6 bg-white border border-stone-200 rounded-full cursor-grab active:cursor-grabbing shadow-lg flex items-center justify-center z-[70] hover:bg-sky-50 transition-colors group/rotate"
+              onMouseDown={handleRotateStart}
+            >
+              <RotateCcw size={12} className="text-sky-500 group-hover/rotate:rotate-180 transition-transform duration-500" />
+            </div>
+
+            {/* Reset Position Button - Only show if transformed */}
+            {hasTransform && (
+              <button 
+                onMouseDown={(e) => { 
+                  e.stopPropagation(); 
+                  updateStyle({ left: undefined, top: undefined, width: undefined, height: undefined, rotation: undefined }); 
+                }}
+                className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-stone-900 text-white text-[8px] font-black uppercase px-2 py-1 rounded-full shadow-lg hover:bg-red-500 transition-colors whitespace-nowrap"
+              >
+                Reset Position
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSelected, isViewer }: { element: FloatingElement, onChange: (el: FloatingElement) => void, onRemove: () => void, onSelect: () => void, isSelected: boolean, isViewer?: boolean }) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [isRotating, setIsRotating] = useState(false);
+  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+  const [initialData, setInitialData] = useState({ left: 0, top: 0, width: 0, height: 0, rotation: 0 });
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (isViewer) return;
+    e.stopPropagation();
+    onSelect();
+    setIsDragging(true);
+    setStartPos({ x: e.clientX, y: e.clientY });
+    setInitialData({ 
+      left: element.left, 
+      top: element.top, 
+      width: element.width, 
+      height: element.height, 
+      rotation: element.rotation || 0 
+    });
+  };
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsResizing(true);
+    setStartPos({ x: e.clientX, y: e.clientY });
+    setInitialData({ 
+      left: element.left, 
+      top: element.top, 
+      width: element.width, 
+      height: element.height, 
+      rotation: element.rotation || 0 
+    });
+  };
+
+  const handleRotateStart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsRotating(true);
+    setStartPos({ x: e.clientX, y: e.clientY });
+    setInitialData({ 
+      left: element.left, 
+      top: element.top, 
+      width: element.width, 
+      height: element.height, 
+      rotation: element.rotation || 0 
+    });
   };
 
   useEffect(() => {
@@ -336,17 +576,22 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
         const dy = e.clientY - startPos.y;
         onChange({
           ...element,
-          left: element.left + dx,
-          top: element.top + dy
+          left: initialData.left + dx,
+          top: initialData.top + dy
         });
-        setStartPos({ x: e.clientX, y: e.clientY });
       } else if (isResizing) {
         const dx = e.clientX - startPos.x;
         const dy = e.clientY - startPos.y;
         onChange({
           ...element,
-          width: Math.max(20, startSize.w + dx),
-          height: Math.max(20, startSize.h + dy)
+          width: Math.max(20, initialData.width + dx),
+          height: Math.max(20, initialData.height + dy)
+        });
+      } else if (isRotating) {
+        const dx = e.clientX - startPos.x;
+        onChange({
+          ...element,
+          rotation: initialData.rotation + (dx / 2) // Slow down rotation sensitivity
         });
       }
     };
@@ -354,9 +599,10 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
     const handleMouseUp = () => {
       setIsDragging(false);
       setIsResizing(false);
+      setIsRotating(false);
     };
 
-    if (isDragging || isResizing) {
+    if (isDragging || isResizing || isRotating) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     }
@@ -364,7 +610,7 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, isResizing, startPos, startSize, element, onChange]);
+  }, [isDragging, isResizing, isRotating, startPos, initialData, element, onChange]);
 
   return (
     <div 
@@ -386,10 +632,11 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
         borderRadius: `${element.borderRadius || 0}px`,
         border: element.strokeWidth && element.borderColor ? `${element.strokeWidth}px solid ${element.borderColor}` : 'none',
         boxShadow: element.shadow ? '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)' : 'none',
-        overflow: 'hidden'
+        overflow: 'visible'
       }}
       onMouseDown={handleMouseDown}
     >
+      <div className="w-full h-full relative overflow-hidden" style={{ borderRadius: `${element.borderRadius || 0}px` }}>
       {element.type === 'image' ? (
         <img src={element.content} referrerPolicy="no-referrer" className="w-full h-full object-cover shadow-xl" style={{ borderRadius: `${element.borderRadius || 8}px` }} alt="" draggable={false} />
       ) : element.type === 'icon' ? (
@@ -466,26 +713,37 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
            { element.content === 'solid-square' && <div className="w-full h-full" style={{ backgroundColor: element.color || 'currentColor', border: element.borderColor ? `${element.strokeWidth || 2}px solid ${element.borderColor}` : 'none', borderRadius: `${element.borderRadius || 8}px`, opacity: element.opacity ?? 0.5 }} /> }
         </div>
       )}
+      </div>
       
-      {!isViewer && isSelected && (
+      {isSelected && !isViewer && (
         <>
-          <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex gap-2 whitespace-nowrap bg-stone-900 text-white px-3 py-1.5 rounded-full text-[10px] font-black uppercase shadow-2xl border border-stone-800">
+          {/* Selected Badge */}
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex gap-2 whitespace-nowrap bg-stone-900 text-white px-3 py-1.5 rounded-full text-[10px] font-black uppercase shadow-2xl border border-stone-800 pointer-events-none">
             <span className="text-[#E8B931]">Selected</span>
             <div className="w-px h-3 bg-stone-700" />
             <button 
-              onClick={(e) => { e.stopPropagation(); onRemove(); }}
-              className="hover:text-red-500 transition-all flex items-center gap-1 group"
+              onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
+              className="hover:text-red-500 transition-all flex items-center gap-1 group pointer-events-auto"
             >
               <Trash2 size={10} className="group-hover:scale-110 transition-transform" />
               Remove
             </button>
           </div>
+          
           {/* Resize Handle */}
           <div 
-            className="absolute -bottom-2 -right-2 w-5 h-5 bg-[#E8B931] border-2 border-stone-950 rounded-full cursor-nwse-resize shadow-lg z-50 flex items-center justify-center"
+            className="absolute -bottom-2 -right-2 w-6 h-6 bg-[#E8B931] border-2 border-white rounded-lg cursor-nwse-resize shadow-lg z-50 flex items-center justify-center hover:scale-110 transition-transform"
             onMouseDown={handleResizeStart}
           >
-            <div className="w-1.5 h-1.5 bg-stone-950 rotate-45" />
+            <div className="w-2 h-2 border-r-2 border-b-2 border-stone-900" />
+          </div>
+
+          {/* Rotate Handle */}
+          <div 
+            className="absolute -top-8 left-1/2 -translate-x-1/2 w-6 h-6 bg-white border-2 border-[#E8B931] rounded-full cursor-grab active:cursor-grabbing shadow-md flex items-center justify-center z-50 hover:bg-mustard transition-colors group/rotate"
+            onMouseDown={handleRotateStart}
+          >
+            <RotateCcw size={12} className="text-mustard group-hover/rotate:text-white" />
           </div>
         </>
       )}
@@ -650,11 +908,13 @@ const INITIAL_EMPTY_DATA: ReportData = {
   unsubscribes: 0,
   unsubscribeRateStr: "0%",
   repliesTotal: 0,
-  campaignsPerformance: []
+  campaignsPerformance: [],
+  metricsLabels: ["Total Emails Sent", "Total Opens", "Total Clicks", "Overall Open Rate", "Overall Click Rate", "Replies / Unsubscribes"],
+  templateStyles: {}
 };
 
 export default function App() {
-  const [data, setData] = useState<ReportData>(MOCK_FULL_DATA);
+  const [data, setData] = useState<ReportData>(INITIAL_EMPTY_DATA);
   const [isViewerMode, setIsViewerMode] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [view, setView] = useState<'auth' | 'dashboard' | 'editor'>('auth');
@@ -664,8 +924,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Loading...');
   const [copySuccess, setCopySuccess] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [sidebarTab, setSidebarTab] = useState<'design' | 'elements' | 'text' | 'uploads' | 'pages' | 'export' | 'inspector' | 'brand' | 'tools' | 'apps'>('design');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<'design' | 'elements' | 'templates' | 'text' | 'uploads' | 'pages' | 'export' | 'inspector' | 'brand' | 'tools' | 'apps'>('templates');
   const [toolSubView, setToolSubView] = useState<'main' | 'magic' | 'resize' | 'styles'>('main');
   const [magicPrompt, setMagicPrompt] = useState('');
   const [magicLoading, setMagicLoading] = useState(false);
@@ -959,8 +1219,20 @@ export default function App() {
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedElementId) {
           e.preventDefault();
-          handleDeleteElement();
+          if (selectedElementId.startsWith('fe-')) {
+            handleDeleteElement();
+          } else if (selectedElementId.startsWith('template-')) {
+            // Reset template style instead of deleting core field
+            updateTemplateStyle(selectedElementId, { left: undefined, top: undefined, width: undefined, height: undefined, rotation: undefined });
+          }
         }
+      } else if (selectedElementId) {
+        // Arrow key movement
+        const amount = e.shiftKey ? 10 : 1;
+        if (e.key === 'ArrowUp') { e.preventDefault(); moveSelected(0, -amount); }
+        if (e.key === 'ArrowDown') { e.preventDefault(); moveSelected(0, amount); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); moveSelected(-amount, 0); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); moveSelected(amount, 0); }
       }
     };
 
@@ -1023,32 +1295,56 @@ export default function App() {
   };
 
   const updateElement = (id: string, updates: Partial<FloatingElement>) => {
-    const isLayoutChange = Object.keys(updates).every(k => ['top', 'left', 'width', 'height'].includes(k));
-    updateReportData(prev => {
+    const isLayoutChange = Object.keys(updates).some(k => ['top', 'left', 'width', 'height', 'rotation'].includes(k));
+    setData(prev => {
       const copy = [...(prev.floatingElements || [])];
       const idx = copy.findIndex(e => e.id === id);
       if (idx !== -1) {
         copy[idx] = { ...copy[idx], ...updates };
       }
       return { ...prev, floatingElements: copy };
-    }, !isLayoutChange);
+    });
   };
 
   const handleDeleteElement = () => {
     if (!selectedElementId) return;
-    updateReportData(prev => ({
+    setData(prev => ({
       ...prev,
       floatingElements: (prev.floatingElements || []).filter(e => e.id !== selectedElementId)
-    }), true);
+    }));
     handleSelectElement(null);
   };
 
   const handleSelectElement = (id: string | null) => {
     setSelectedElementId(id);
     if (id) {
-      setIsSidebarOpen(true);
-      setSidebarTab('inspector');
+       setIsSidebarOpen(true);
+       setSidebarTab('inspector');
     }
+  };
+
+  const moveSelected = (dx: number, dy: number) => {
+    if (!selectedElementId) return;
+    if (selectedElementId.startsWith('fe-')) {
+      const el = data.floatingElements?.find(e => e.id === selectedElementId);
+      if (el) updateElement(selectedElementId, { left: el.left + dx, top: el.top + dy });
+    } else if (selectedElementId.startsWith('template-')) {
+      const style = data.templateStyles?.[selectedElementId] || {};
+      updateTemplateStyle(selectedElementId, { 
+        left: (style.left || 0) + dx, 
+        top: (style.top || 0) + dy 
+      });
+    }
+  };
+
+  const updateTemplateStyle = (id: string, updates: Partial<TemplateStyle>) => {
+    setData(prev => ({
+      ...prev,
+      templateStyles: {
+        ...(prev.templateStyles || {}),
+        [id]: { ...(prev.templateStyles?.[id] || {}), ...updates }
+      }
+    }));
   };
 
   const handleSelection = (sectionId: string | null) => {
@@ -1260,6 +1556,74 @@ export default function App() {
     loadReport(id);
   };
 
+  const renderTemplatesTab = () => (
+    <div className="space-y-8">
+       <section className="space-y-4">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Professional Templates</h3>
+          <div className="grid grid-cols-1 gap-4">
+             {[
+               { id: 'marketing', name: 'Email Marketing', desc: 'Case study & detailed metrics', color: '#EBB33D', icon: <Mail size={24}/> },
+               { id: 'saas', name: 'SaaS Dashboard', desc: 'SaaS operational overview', color: '#1a1a1a', icon: <Cpu size={24}/> },
+               { id: 'minimal', name: 'Minimalist', desc: 'Clean, spacious design', color: '#ffffff', icon: <Minimize size={24}/> },
+             ].map((tpl) => (
+                <button 
+                  key={tpl.id}
+                  onClick={() => {
+                    // Set template specific sections
+                    const sections: ReportData['sections'] = tpl.id === 'minimal' ? [
+                      { id: 'sec-cover', type: 'cover' },
+                      { id: 'sec-overview', type: 'metrics_overview' }
+                    ] : [
+                      { id: 'sec-cover', type: 'cover' },
+                      { id: 'sec-overview', type: 'metrics_overview' },
+                      { id: 'sec-main', type: 'report_main' },
+                      { id: 'sec-dist', type: 'distribution' }
+                    ];
+                    setData({ ...data, sections, themeColor: tpl.color });
+                  }}
+                  className="group relative overflow-hidden bg-stone-50 border border-stone-100 rounded-[32px] p-6 text-left transition-all hover:border-mustard hover:shadow-2xl hover:shadow-mustard/10 active:scale-[0.98]"
+                >
+                   <div className="flex gap-4 items-center mb-4">
+                      <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-stone-400 group-hover:text-mustard transition-colors">
+                        {tpl.icon}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-stone-900 leading-none mb-1">{tpl.name}</h4>
+                        <p className="text-[8px] font-bold text-stone-400 uppercase tracking-widest">{tpl.desc}</p>
+                      </div>
+                   </div>
+                   <div className="flex -space-x-2">
+                      <div className="w-8 h-8 rounded-full border-2 border-white" style={{ backgroundColor: tpl.color }} />
+                      <div className="w-8 h-8 rounded-full bg-stone-200 border-2 border-white" />
+                   </div>
+                </button>
+             ))}
+          </div>
+       </section>
+
+       <section className="space-y-4">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Page Presets</h3>
+          <div className="grid grid-cols-2 gap-3">
+             {[
+               { type: 'cover', icon: <FileText size={20}/>, label: 'Cover Page' },
+               { type: 'metrics_overview', icon: <MousePointerClick size={20}/>, label: 'Metrics' },
+               { type: 'report_main', icon: <LayoutDashboard size={20}/>, label: 'Main Repo' },
+               { type: 'distribution' as const, icon: <PieChartIcon size={20}/>, label: 'Charts' },
+             ].map((preset) => (
+                <button 
+                  key={preset.type}
+                  onClick={() => addSection(preset.type)}
+                  className="flex flex-col items-center justify-center gap-2 p-4 bg-white border border-stone-100 rounded-2xl hover:border-mustard transition-all active:scale-95 group shadow-sm"
+                >
+                  <div className="text-stone-300 group-hover:text-mustard transition-colors">{preset.icon}</div>
+                  <span className="text-[9px] font-black uppercase text-stone-500">{preset.label}</span>
+                </button>
+             ))}
+          </div>
+       </section>
+    </div>
+  );
+  
   const renderDesignTab = () => (
     <div className="space-y-8">
       <section className="space-y-4">
@@ -1665,6 +2029,120 @@ export default function App() {
   );
 
   const renderInspectorTab = () => {
+    if (selectedElementId?.startsWith('template-')) {
+      const field = selectedElementId.replace('template-', '');
+      const tStyle = data.templateStyles?.[selectedElementId] || {};
+      const updateTStyle = (updates: Partial<TemplateStyle>) => updateTemplateStyle(selectedElementId, updates);
+
+      return (
+        <div className="space-y-8">
+           <section className="space-y-3 px-1">
+             <div className="flex justify-between items-center">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Template Logic</h3>
+                <button 
+                  onClick={() => updateTStyle({ left: undefined, top: undefined, width: undefined, height: undefined, rotation: undefined })}
+                  className="text-[9px] font-black uppercase text-mustard hover:underline"
+                >
+                  Reset Layout
+                </button>
+             </div>
+             <p className="text-xs font-bold text-stone-600 italic">Editing: <span className="text-mustard uppercase">{field.replace(/([A-Z])/g, ' $1')}</span></p>
+           </section>
+
+           <section className="space-y-3 px-1">
+             <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Position & Scale</h3>
+             <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[9px] uppercase font-bold text-stone-500">X Position</label>
+                  <input type="number" value={Math.round(tStyle.left || 0)} onChange={(e) => updateTStyle({ left: parseInt(e.target.value) })} className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg px-3 text-xs font-bold" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] uppercase font-bold text-stone-500">Y Position</label>
+                  <input type="number" value={Math.round(tStyle.top || 0)} onChange={(e) => updateTStyle({ top: parseInt(e.target.value) })} className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg px-3 text-xs font-bold" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] uppercase font-bold text-stone-500">Width</label>
+                  <input type="number" value={Math.round(tStyle.width || 0)} onChange={(e) => updateTStyle({ width: parseInt(e.target.value) })} className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg px-3 text-xs font-bold" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] uppercase font-bold text-stone-500">Rotation</label>
+                  <input type="number" value={Math.round(tStyle.rotation || 0)} onChange={(e) => updateTStyle({ rotation: parseInt(e.target.value) })} className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg px-3 text-xs font-bold" />
+                </div>
+             </div>
+           </section>
+
+           <section className="space-y-3 px-1">
+             <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Styling</h3>
+             <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[9px] uppercase font-bold text-stone-500">Font Size</label>
+                  <input type="number" value={tStyle.fontSize || 16} onChange={(e) => updateTStyle({ fontSize: parseInt(e.target.value) })} className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg px-3 text-xs font-bold" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] uppercase font-bold text-stone-500">Color</label>
+                  <input type="color" value={tStyle.color || '#000000'} onChange={(e) => updateTStyle({ color: e.target.value })} className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg cursor-pointer" />
+                </div>
+             </div>
+             <div className="space-y-1">
+                <label className="text-[9px] uppercase font-bold text-stone-500">Alignment</label>
+                <div className="flex gap-1 p-1 bg-stone-50 rounded-xl border border-stone-200">
+                   {(['left', 'center', 'right'] as const).map(align => (
+                     <button 
+                       key={align}
+                       onClick={() => updateTStyle({ textAlign: align })}
+                       className={cn(
+                         "flex-1 h-8 flex items-center justify-center rounded-lg transition-all",
+                         tStyle.textAlign === align ? "bg-white text-mustard shadow-sm" : "text-stone-400 hover:text-stone-600"
+                       )}
+                     >
+                       {align[0].toUpperCase()}
+                     </button>
+                   ))}
+                </div>
+             </div>
+           </section>
+
+           <section className="space-y-3 px-1">
+             <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Content</h3>
+             <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] uppercase font-bold text-stone-500">Value</label>
+                  {field.startsWith('metric-') ? (() => {
+                    const idx = parseInt(field.split('-')[1]);
+                    const currentVal = (data.metricsLabels || [])[idx] || '';
+                    return (
+                      <input 
+                        type="text" 
+                        value={currentVal} 
+                        onChange={(e) => {
+                          const newLabels = [...(data.metricsLabels || [])];
+                          newLabels[idx] = e.target.value;
+                          updateReportData({ metricsLabels: newLabels });
+                        }}
+                        className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg px-3 text-xs font-bold focus:ring-2 focus:ring-mustard/20 outline-none"
+                      />
+                    );
+                  })() : (data as any)[field]?.toString().includes('\n') ? (
+                    <textarea 
+                      value={(data as any)[field] || ''} 
+                      onChange={(e) => updateReportData({ [field]: e.target.value })}
+                      className="w-full h-32 bg-stone-50 border border-stone-200 rounded-lg p-3 text-xs font-bold focus:ring-2 focus:ring-mustard/20 outline-none resize-none"
+                    />
+                  ) : (
+                    <input 
+                      type="text" 
+                      value={(data as any)[field] || ''} 
+                      onChange={(e) => updateReportData({ [field]: e.target.value })}
+                      className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg px-3 text-xs font-bold focus:ring-2 focus:ring-mustard/20 outline-none"
+                    />
+                  )}
+                </div>
+             </div>
+           </section>
+        </div>
+      );
+    }
+
     const el = (data.floatingElements || []).find(e => e.id === selectedElementId);
     if (!el) return (
       <div className="space-y-8 px-1">
@@ -1726,7 +2204,67 @@ export default function App() {
     return (
       <div className="space-y-8">
         <section className="space-y-3">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Layering & Position</h3>
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Dimensions & Position</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[9px] uppercase font-bold text-stone-500">Width (px)</label>
+              <input 
+                type="number" 
+                value={Math.round(el.width)} 
+                onChange={(e) => updateEl({ width: parseInt(e.target.value) || 0 })} 
+                className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg px-3 text-xs font-bold focus:ring-2 focus:ring-mustard/20 outline-none" 
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] uppercase font-bold text-stone-500">Height (px)</label>
+              <input 
+                type="number" 
+                value={Math.round(el.height)} 
+                onChange={(e) => updateEl({ height: parseInt(e.target.value) || 0 })} 
+                className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg px-3 text-xs font-bold focus:ring-2 focus:ring-mustard/20 outline-none" 
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] uppercase font-bold text-stone-500">X (Left)</label>
+              <input 
+                type="number" 
+                value={Math.round(el.left)} 
+                onChange={(e) => updateEl({ left: parseInt(e.target.value) || 0 })} 
+                className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg px-3 text-xs font-bold focus:ring-2 focus:ring-mustard/20 outline-none" 
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] uppercase font-bold text-stone-500">Y (Top)</label>
+              <input 
+                type="number" 
+                value={Math.round(el.top)} 
+                onChange={(e) => updateEl({ top: parseInt(e.target.value) || 0 })} 
+                className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg px-3 text-xs font-bold focus:ring-2 focus:ring-mustard/20 outline-none" 
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] uppercase font-bold text-stone-500">Rotation (°)</label>
+              <input 
+                type="number" 
+                value={el.rotation || 0} 
+                onChange={(e) => updateEl({ rotation: parseInt(e.target.value) || 0 })} 
+                className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg px-3 text-xs font-bold focus:ring-2 focus:ring-mustard/20 outline-none" 
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] uppercase font-bold text-stone-500">Opacity (%)</label>
+              <input 
+                type="number" 
+                value={Math.round((el.opacity ?? 1) * 100)} 
+                onChange={(e) => updateEl({ opacity: (parseInt(e.target.value) || 0) / 100 })} 
+                className="w-full h-10 bg-stone-50 border border-stone-200 rounded-lg px-3 text-xs font-bold focus:ring-2 focus:ring-mustard/20 outline-none" 
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Layering</h3>
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => updateEl({ zIndex: (el.zIndex || 0) + 1 })} className="h-10 bg-stone-50 border border-stone-200 rounded-xl text-[9px] font-black uppercase hover:bg-white transition-all flex items-center justify-center gap-2">
                <ChevronUp size={14}/> Bring Forward
@@ -1804,6 +2342,23 @@ export default function App() {
                        <option value="black">Black</option>
                     </select>
                  </div>
+              </div>
+              <div className="space-y-1 mt-2">
+                <label className="text-[9px] uppercase font-bold text-stone-500">Alignment</label>
+                <div className="flex gap-1 p-1 bg-stone-50 rounded-xl border border-stone-200">
+                   {(['left', 'center', 'right'] as const).map(align => (
+                     <button 
+                       key={align}
+                       onClick={() => updateEl({ textAlign: align })}
+                       className={cn(
+                         "flex-1 h-8 flex items-center justify-center rounded-lg transition-all",
+                         el.textAlign === align ? "bg-white text-[#E8B931] shadow-sm" : "text-stone-400 hover:text-stone-600"
+                       )}
+                     >
+                       {align === 'left' ? <ChevronLeft size={14}/> : align === 'center' ? <Hash size={14}/> : <ChevronRight size={14}/>}
+                     </button>
+                   ))}
+                </div>
               </div>
            </section>
         )}
@@ -2101,32 +2656,77 @@ export default function App() {
               </div>
 
               <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-8 items-center relative z-10">
-                <div>
-                   <h1 className="text-[80px] font-black leading-[0.9] tracking-tighter uppercase mb-6">
-                      <EditableTextArea 
-                        value={data.reportTitle || "EMAIL\nMARKETING\nCASE STUDY"} 
-                        onChange={(v) => updateReportData({ reportTitle: v })}
-                        isViewer={isViewerMode}
-                      />
-                   </h1>
-                   <p className="text-2xl font-bold uppercase tracking-widest opacity-80">
-                      <EditableText 
-                        value={data.campaignName || "Campaign Overview"} 
-                        onChange={(v) => updateReportData({ campaignName: v })} 
-                        isViewer={isViewerMode} 
-                      />
-                   </p>
-                   
-                   <div className="mt-20">
-                      <div className="w-64 h-64 relative">
-                        <ClickableImage 
-                          src={data.clientLogo || "https://images.unsplash.com/photo-1557200134-90327ee9fafa?w=400&h=400&fit=crop"}
-                          onUpload={(url) => updateReportData({ clientLogo: url })}
-                          className="w-full h-full object-contain filter grayscale brightness-50 contrast-125"
+                <div className="space-y-6">
+                   <TemplateTransformWrapper 
+                    id="template-reportTitle" 
+                    data={data} 
+                    isSelected={selectedElementId === 'template-reportTitle'}
+                    onSelect={() => handleSelectElement('template-reportTitle')}
+                    updateStyle={(u) => updateTemplateStyle('template-reportTitle', u)}
+                    isViewer={isViewerMode}
+                   >
+                     <h1 
+                      className="text-[80px] font-black leading-[0.9] tracking-tighter uppercase mb-6"
+                      style={{ 
+                        fontSize: data.templateStyles?.['template-reportTitle']?.fontSize ? `${data.templateStyles['template-reportTitle'].fontSize}px` : undefined,
+                        color: data.templateStyles?.['template-reportTitle']?.color || undefined,
+                        textAlign: data.templateStyles?.['template-reportTitle']?.textAlign || undefined
+                      }}
+                     >
+                        <EditableTextArea 
+                          value={data.reportTitle || "EMAIL\nMARKETING\nCASE STUDY"} 
+                          onChange={(v) => updateReportData({ reportTitle: v })}
                           isViewer={isViewerMode}
+                          isSelected={selectedElementId === 'template-reportTitle'}
                         />
-                      </div>
-                   </div>
+                     </h1>
+                   </TemplateTransformWrapper>
+
+                   <TemplateTransformWrapper 
+                    id="template-campaignName" 
+                    data={data} 
+                    isSelected={selectedElementId === 'template-campaignName'}
+                    onSelect={() => handleSelectElement('template-campaignName')}
+                    updateStyle={(u) => updateTemplateStyle('template-campaignName', u)}
+                    isViewer={isViewerMode}
+                   >
+                      <p 
+                        className="text-2xl font-bold uppercase tracking-widest opacity-80"
+                        style={{ 
+                          fontSize: data.templateStyles?.['template-campaignName']?.fontSize ? `${data.templateStyles['template-campaignName'].fontSize}px` : undefined,
+                          color: data.templateStyles?.['template-campaignName']?.color || undefined,
+                          textAlign: data.templateStyles?.['template-campaignName']?.textAlign || undefined
+                        }}
+                      >
+                         <EditableText 
+                           value={data.campaignName || "Campaign Overview"} 
+                           onChange={(v) => updateReportData({ campaignName: v })} 
+                           isViewer={isViewerMode} 
+                           isSelected={selectedElementId === 'template-campaignName'}
+                         />
+                      </p>
+                   </TemplateTransformWrapper>
+                    
+                    <div className="mt-20">
+                       <TemplateTransformWrapper 
+                        id="template-clientLogo" 
+                        data={data} 
+                        isSelected={selectedElementId === 'template-clientLogo'}
+                        onSelect={() => handleSelectElement('template-clientLogo')}
+                        updateStyle={(u) => updateTemplateStyle('template-clientLogo', u)}
+                        isViewer={isViewerMode}
+                       >
+                         <div className="w-64 h-64 relative">
+                           <ClickableImage 
+                             src={data.clientLogo || "https://images.unsplash.com/photo-1557200134-90327ee9fafa?w=400&h=400&fit=crop"}
+                             onUpload={(url) => updateReportData({ clientLogo: url })}
+                             className="w-full h-full object-contain filter grayscale brightness-50 contrast-125"
+                             isViewer={isViewerMode}
+                             isSelected={selectedElementId === 'template-clientLogo'}
+                           />
+                         </div>
+                       </TemplateTransformWrapper>
+                    </div>
                 </div>
 
                 <div className="flex flex-col gap-12 pr-12">
@@ -2161,22 +2761,62 @@ export default function App() {
                    </svg>
                 </div>
 
-                <h2 className="text-[120px] font-black tracking-tighter leading-none mb-16 uppercase">
-                   <EditableTextArea 
-                     value={data.overviewTitle || "Overview\nMetrics"} 
-                     onChange={(v) => updateReportData({ overviewTitle: v })} 
-                     isViewer={isViewerMode} 
-                   />
-                </h2>
+                <TemplateTransformWrapper 
+                 id="template-overviewTitle" 
+                 data={data} 
+                 isSelected={selectedElementId === 'template-overviewTitle'}
+                 onSelect={() => handleSelectElement('template-overviewTitle')}
+                 updateStyle={(u) => updateTemplateStyle('template-overviewTitle', u)}
+                 isViewer={isViewerMode}
+                >
+                  <h2 
+                    className="text-[120px] font-black tracking-tighter leading-none mb-16 uppercase"
+                    style={{ 
+                      fontSize: data.templateStyles?.['template-overviewTitle']?.fontSize ? `${data.templateStyles['template-overviewTitle'].fontSize}px` : undefined,
+                      color: data.templateStyles?.['template-overviewTitle']?.color || undefined,
+                      textAlign: data.templateStyles?.['template-overviewTitle']?.textAlign || undefined
+                    }}
+                  >
+                     <EditableTextArea 
+                       value={data.overviewTitle || "Overview\nMetrics"} 
+                       onChange={(v) => updateReportData({ overviewTitle: v })} 
+                       isViewer={isViewerMode} 
+                       isSelected={selectedElementId === 'template-overviewTitle'}
+                     />
+                  </h2>
+                </TemplateTransformWrapper>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-20 gap-y-6 max-w-4xl">
-                   {[
-                     "Total Emails Sent", "Total Opens", "Total Clicks", 
-                     "Overall Open Rate", "Overall Click Rate", "Replies / Unsubscribes"
-                   ].map((m, i) => (
-                     <div key={i} className="flex items-center gap-6 text-3xl font-black italic group p-2 hover:translate-x-4 transition-transform cursor-pointer">
-                       <span className="text-4xl opacity-20">0{i+1}</span>
-                       <EditableText value={m} onChange={() => {}} isViewer={isViewerMode} />
-                     </div>
+                   {(data.metricsLabels || []).map((m, i) => (
+                     <TemplateTransformWrapper 
+                      key={i}
+                      id={`template-metric-${i}`} 
+                      data={data} 
+                      isSelected={selectedElementId === `template-metric-${i}`}
+                      onSelect={() => handleSelectElement(`template-metric-${i}`)}
+                      updateStyle={(u) => updateTemplateStyle(`template-metric-${i}`, u)}
+                      isViewer={isViewerMode}
+                     >
+                       <div 
+                        className="flex items-center gap-6 text-3xl font-black italic group p-2 hover:translate-x-4 transition-transform cursor-pointer"
+                        style={{ 
+                          fontSize: data.templateStyles?.[`template-metric-${i}`]?.fontSize ? `${data.templateStyles[`template-metric-${i}`].fontSize}px` : undefined,
+                          color: data.templateStyles?.[`template-metric-${i}`]?.color || undefined,
+                        }}
+                       >
+                         <span className="text-4xl opacity-20">0{i+1}</span>
+                         <EditableText 
+                          value={m} 
+                          onChange={(v) => {
+                            const newLabels = [...(data.metricsLabels || [])];
+                            newLabels[i] = v;
+                            updateReportData({ metricsLabels: newLabels });
+                          }} 
+                          isViewer={isViewerMode} 
+                          isSelected={selectedElementId === `template-metric-${i}`}
+                         />
+                       </div>
+                     </TemplateTransformWrapper>
                    ))}
                 </div>
                 <p className="mt-20 text-xl font-bold opacity-60 italic max-w-xl">
@@ -2190,14 +2830,45 @@ export default function App() {
           <SectionWrapper key={section.id} {...commonProps}>
             <div className="min-h-[750px] p-24 md:p-40 flex flex-col gap-12 relative overflow-hidden" style={containerStyle}>
                 <div className="flex justify-between items-end">
-                   <div>
-                      <p className="text-2xl font-bold opacity-80 uppercase tracking-widest leading-none mb-2">
-                        <EditableText value={data.campaignName || "Campaign Name"} onChange={(v) => updateReportData({ campaignName: v })} isViewer={isViewerMode} />
-                      </p>
-                      <h2 className="text-7xl font-black tracking-tighter uppercase leading-none">
-                        <EditableText value={data.reportTitle || "Email Marketing Report"} onChange={(v) => updateReportData({ reportTitle: v })} isViewer={isViewerMode} />
-                      </h2>
-                   </div>
+                    <div className="space-y-4">
+                       <TemplateTransformWrapper 
+                         id="template-mainCampaign" 
+                         data={data} 
+                         isSelected={selectedElementId === 'template-mainCampaign'}
+                         onSelect={() => handleSelectElement('template-mainCampaign')}
+                         updateStyle={(u) => updateTemplateStyle('template-mainCampaign', u)}
+                         isViewer={isViewerMode}
+                       >
+                        <p 
+                          className="text-2xl font-bold opacity-80 uppercase tracking-widest leading-none"
+                          style={{ 
+                            fontSize: data.templateStyles?.['template-mainCampaign']?.fontSize ? `${data.templateStyles['template-mainCampaign'].fontSize}px` : undefined,
+                            color: data.templateStyles?.['template-mainCampaign']?.color || undefined
+                          }}
+                        >
+                          <EditableText value={data.campaignName || "Campaign Name"} onChange={(v) => updateReportData({ campaignName: v })} isViewer={isViewerMode} isSelected={selectedElementId === 'template-mainCampaign'} />
+                        </p>
+                       </TemplateTransformWrapper>
+
+                       <TemplateTransformWrapper 
+                         id="template-mainTitle" 
+                         data={data} 
+                         isSelected={selectedElementId === 'template-mainTitle'}
+                         onSelect={() => handleSelectElement('template-mainTitle')}
+                         updateStyle={(u) => updateTemplateStyle('template-mainTitle', u)}
+                         isViewer={isViewerMode}
+                       >
+                        <h2 
+                          className="text-7xl font-black tracking-tighter uppercase leading-none"
+                          style={{ 
+                            fontSize: data.templateStyles?.['template-mainTitle']?.fontSize ? `${data.templateStyles['template-mainTitle'].fontSize}px` : undefined,
+                            color: data.templateStyles?.['template-mainTitle']?.color || undefined
+                          }}
+                        >
+                          <EditableText value={data.reportTitle || "Email Marketing Report"} onChange={(v) => updateReportData({ reportTitle: v })} isViewer={isViewerMode} isSelected={selectedElementId === 'template-mainTitle'} />
+                        </h2>
+                       </TemplateTransformWrapper>
+                    </div>
                    <div className="bg-white p-8 rounded-3xl shadow-xl flex items-center gap-6">
                       <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400">
                          <CalendarIcon size={32} />
@@ -3042,7 +3713,7 @@ export default function App() {
       await new Promise(r => setTimeout(r, 800));
 
       // Use html2canvas on the ENTIRE container to get floating elements correctly
-      const captureWidth = 1200; // Fixed width for consistent high-quality export
+      const { width: captureWidth } = getPageDimensions();
       
       const captureOptions = {
         scale: 2, // 2x for retina quality
@@ -3095,16 +3766,23 @@ export default function App() {
             container.style.transform = 'none';
             container.style.width = `${captureWidth}px`;
             container.style.margin = '0';
-            container.style.padding = '40px';
+            container.style.padding = '0';
             container.style.display = 'flex';
             container.style.flexDirection = 'column';
-            container.style.gap = '0'; // We will handle spacing manually if needed or use sections
+            container.style.gap = '48px'; // Match the gap-12 from the UI
             container.style.boxShadow = 'none';
+            container.style.overflow = 'visible'; // Ensure nothing is clipped
+            
+            // Fix for absolute elements positioning
+            container.style.position = 'relative';
           }
 
-          // Hide UI elements that shouldn't be in print
-          clonedDoc.querySelectorAll('.absolute.-top-12, .cursor-nwse-resize, .group\\/section .absolute, .context-toolbar').forEach(e => {
-            (e as HTMLElement).style.display = 'none';
+          // Ensure floating elements are visible and positioned correctly
+          clonedDoc.querySelectorAll('.group\\/floating').forEach((el: any) => {
+             el.style.visibility = 'visible';
+             el.style.opacity = el.style.opacity || '1';
+             // Hide handles in print
+             el.querySelectorAll('.cursor-nwse-resize, .group\\/rotate, button').forEach((h: any) => h.style.display = 'none');
           });
         }
       };
@@ -3115,49 +3793,39 @@ export default function App() {
       const sections = previewArea.querySelectorAll('.print\\:break-after-page');
       
       // Calculate dimensions for jsPDF
-      // A4 is 210 x 297 mm. We will use pixels for precision then scale.
       const pdf = new jsPDF({
-        orientation: 'p',
+        orientation: captureWidth > 1200 ? 'l' : 'p',
         unit: 'px',
-        format: [captureWidth, 1600] // Initial guess, we will adjust
+        format: [captureWidth, 1600] 
       });
 
       if (sections.length > 0) {
-        // Multi-page export by slicing the big canvas
-        // This is tricky but leads to the best "Canva" feel where floating elements are preserved
         let currentY = 0;
         
         for (let i = 0; i < sections.length; i++) {
           const section = sections[i] as HTMLElement;
-          const sectionHeight = section.offsetHeight + 48; // add gap
+          const sectionHeight = section.offsetHeight;
+          const gap = i < sections.length - 1 ? 48 : 0;
           
-          if (i > 0) pdf.addPage([captureWidth, sectionHeight], 'p');
+          if (i > 0) pdf.addPage([captureWidth, sectionHeight], captureWidth > sectionHeight ? 'l' : 'p');
           else {
-            // Re-initialize first page with correct size
             (pdf as any).deletePage(1);
-            pdf.addPage([captureWidth, sectionHeight], 'p');
+            pdf.addPage([captureWidth, sectionHeight], captureWidth > sectionHeight ? 'l' : 'p');
           }
 
-          // Use the big canvas and crop it for each page
-          // This ensures everything (floating elements included) is captured at once
-          pdf.addImage(imgData, 'JPEG', 0, -currentY, captureWidth, canvas.height / 2, undefined, 'FAST');
-          currentY += sectionHeight;
+          pdf.addImage(imgData, 'JPEG', 0, -currentY, captureWidth, canvas.height / 2);
+          currentY += sectionHeight + gap;
         }
+        const title = (data.reportTitle || 'Report').replace(/\s+/g, '_');
+        pdf.save(`${title}_${Date.now()}.pdf`);
       } else {
-        // Single page
-        const w = canvas.width / 2;
         const h = canvas.height / 2;
-        const pdfSingle = new jsPDF({ orientation: w > h ? 'l' : 'p', unit: 'px', format: [w, h] });
-        pdfSingle.addImage(imgData, 'JPEG', 0, 0, w, h);
+        const pdfSingle = new jsPDF({ orientation: captureWidth > h ? 'l' : 'p', unit: 'px', format: [captureWidth, h] });
+        pdfSingle.addImage(imgData, 'JPEG', 0, 0, captureWidth, h);
         const title = (data.reportTitle || 'Report').replace(/\s+/g, '_');
         pdfSingle.save(`${title}_${Date.now()}.pdf`);
-        setIsLoading(false);
         return;
       }
-
-      const title = (data.reportTitle || 'Report').replace(/\s+/g, '_');
-      pdf.save(`${title}_${Date.now()}.pdf`);
-
     } catch (err) {
       console.error("PDF generation failed:", err);
       alert(`Failed to generate PDF. Please try the "Save as Web Format" option for the most accurate results.`);
@@ -3477,6 +4145,12 @@ export default function App() {
               <div className="w-8 h-[1px] bg-white/10 my-2" />
               <RailButton 
                 icon={<LayoutTemplate size={22} />} 
+                label="Templates" 
+                active={sidebarTab === 'templates'} 
+                onClick={() => { setSidebarTab('templates'); setIsSidebarOpen(true); }} 
+              />
+              <RailButton 
+                icon={<Palette size={22} />} 
                 label="Design" 
                 active={sidebarTab === 'design'} 
                 onClick={() => { setSidebarTab('design'); setIsSidebarOpen(true); }} 
@@ -3544,14 +4218,17 @@ export default function App() {
             className="bg-white border-r border-stone-200 overflow-hidden relative shadow-2xl z-[90] shrink-0"
           >
             <div className="w-[360px] h-full flex flex-col">
-              <header className="h-[72px] px-6 flex items-center justify-between flex-shrink-0">
-                <h2 className="font-extrabold text-lg text-stone-900 capitalize">{sidebarTab}</h2>
-                <button onClick={() => setIsSidebarOpen(false)} className="w-8 h-8 rounded-full hover:bg-stone-50 flex items-center justify-center text-stone-400">
+              <header className="h-20 px-8 flex items-center justify-between flex-shrink-0 border-b border-stone-100 bg-white/80 backdrop-blur-md sticky top-0 z-10">
+                <h2 className="font-black text-xl text-stone-900 capitalize tracking-tight italic">{sidebarTab}</h2>
+                <button 
+                  onClick={() => setIsSidebarOpen(false)} 
+                  className="w-10 h-10 rounded-full hover:bg-stone-50 flex items-center justify-center text-stone-400 hover:text-stone-900 transition-all border border-transparent hover:border-stone-100 shadow-sm hover:shadow-md"
+                >
                   <ChevronLeft size={20} />
                 </button>
               </header>
               
-              <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+              <div className="flex-1 overflow-y-auto px-8 py-6 scrollbar-thin scrollbar-thumb-stone-200 scrollbar-track-transparent hover:scrollbar-thumb-stone-300">
                 <div className="mb-6 relative">
                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"><Search size={16}/></div>
                    <input 
@@ -3560,6 +4237,7 @@ export default function App() {
                      className="w-full h-10 bg-stone-100/50 border border-stone-200 rounded-xl pl-10 pr-4 text-xs font-medium focus:bg-white focus:ring-2 focus:ring-mustard/20 focus:outline-none transition-all" 
                    />
                 </div>
+                {sidebarTab === 'templates' && renderTemplatesTab()}
                 {sidebarTab === 'design' && renderDesignTab()}
                 {sidebarTab === 'elements' && renderElementsTab()}
                 {sidebarTab === 'text' && renderTextTab()}
