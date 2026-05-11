@@ -9,9 +9,10 @@ import {
   LogOut, MessageSquare, Download, Settings2, Briefcase, ExternalLink, Filter, Plus, Trash2, Palette, Image, Type, Maximize2, FileText, Info, RotateCcw,
   Share2, LogIn, User as UserIcon, Loader2, Save, Menu, X, Link as LinkIcon, Telescope, Calendar as CalendarIcon, Copy, Trash, PieChart as PieChartIcon, ChevronUp, ChevronDown, LayoutDashboard, Chrome,
   Sprout, Leaf, Star, Heart, Triangle, Zap, Award, Smile, Square, Minus, ArrowRight, Layers,
-  ChevronRight, ChevronLeft, Hash,
-  Monitor, Redo2, Undo2, CloudCheck, Search, Globe, Box, Grid3X3, Wand2, UploadCloud, FolderHeart, LayoutTemplate, Cpu, Minimize,
-  PlusSquare, Settings, Accessibility, FolderOpen, Printer, History, CloudOff, Sparkles
+  ChevronRight, ChevronLeft, Hash, ArrowUpToLine, ArrowDownToLine,
+  Monitor, Redo2, Undo2, CloudCheck, Search, Globe, Box, Grid3X3, Wand2, UploadCloud, FolderHeart, LayoutTemplate, Cpu, Minimize, Rocket, Target, Shield,
+  PlusSquare, Settings, Accessibility, FolderOpen, Printer, History, CloudOff, Sparkles,
+  FlipHorizontal, FlipVertical, AlignLeft, AlignCenter, AlignRight, Layers as LayersIcon, Eraser, Wand
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import html2canvas from 'html2canvas';
@@ -118,7 +119,9 @@ function EditableText({ value, onChange, className, isViewer, onSelect, isSelect
   const [isEditing, setIsEditing] = useState(false);
   const [val, setVal] = useState(value);
 
-  useEffect(() => { setVal(value); }, [value]);
+  useEffect(() => { 
+    if (!isEditing) setVal(value); 
+  }, [value, isEditing]);
 
   if (isViewer) return <span className={className}>{value}</span>;
 
@@ -153,7 +156,9 @@ function EditableTextArea({ value, onChange, className, isViewer, onSelect, isSe
   const [isEditing, setIsEditing] = useState(false);
   const [val, setVal] = useState(value);
 
-  useEffect(() => { setVal(value); }, [value]);
+  useEffect(() => { 
+    if (!isEditing) setVal(value); 
+  }, [value, isEditing]);
 
   if (isViewer) return <span className={className}>{value}</span>;
 
@@ -322,7 +327,7 @@ function SectionWrapper({ children, onDuplicate, onRemove, onMoveUp, onMoveDown,
       onClick={onClick}
       style={style}
       className={cn(
-        "relative group/section print:break-after-page mb-16 print:mb-0 min-h-[500px] transition-all",
+        "relative group/section print:break-after-page mb-16 print:mb-0 min-h-[1122px] transition-all",
         !isViewer && "cursor-pointer rounded-2xl",
         !isViewer && isActive && "ring-4 ring-mustard/30 ring-offset-8 ring-offset-transparent shadow-2xl"
       )}
@@ -473,7 +478,7 @@ function TemplateTransformWrapper({
         top: style.top !== undefined ? `${style.top}px` : undefined,
         width: style.width !== undefined ? `${style.width}px` : undefined,
         height: style.height !== undefined ? `${style.height}px` : undefined,
-        transform: style.rotation ? `rotate(${style.rotation}deg)` : undefined,
+        transform: `rotate(${style.rotation || 0}deg) scaleX(${style.flipH ? -1 : 1}) scaleY(${style.flipV ? -1 : 1})`,
         opacity: style.opacity ?? 1,
         zIndex: isSelected ? 50 : undefined
       }}
@@ -626,7 +631,7 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
         width: `${element.width}px`,
         height: `${element.height}px`,
         zIndex: element.zIndex,
-        transform: `rotate(${element.rotation || 0}deg)`,
+        transform: `rotate(${element.rotation || 0}deg) scaleX(${element.flipH ? -1 : 1}) scaleY(${element.flipV ? -1 : 1})`,
         opacity: element.opacity ?? 1,
         backgroundColor: element.backgroundColor || 'transparent',
         borderRadius: `${element.borderRadius || 0}px`,
@@ -636,7 +641,14 @@ function FloatingElementComponent({ element, onChange, onRemove, onSelect, isSel
       }}
       onMouseDown={handleMouseDown}
     >
-      <div className="w-full h-full relative overflow-hidden" style={{ borderRadius: `${element.borderRadius || 0}px` }}>
+      <div 
+        className="w-full h-full relative overflow-hidden" 
+        style={{ 
+          borderRadius: `${element.borderRadius || 0}px`,
+          mixBlendMode: element.isBgRemoved ? 'multiply' : 'normal',
+          filter: element.isBgRemoved ? 'contrast(1.2) brightness(1.1)' : 'none'
+        }}
+      >
       {element.type === 'image' ? (
         <img src={element.content} referrerPolicy="no-referrer" className="w-full h-full object-cover shadow-xl" style={{ borderRadius: `${element.borderRadius || 8}px` }} alt="" draggable={false} />
       ) : element.type === 'icon' ? (
@@ -770,83 +782,249 @@ function RailButton({ icon, label, active, onClick, className }: { icon: React.R
   );
 }
 
-function ContextToolbar({ selectedElementId, elements, updateEl, deleteEl, data }: { selectedElementId: string | null, elements: FloatingElement[], updateEl: (id: string, updates: Partial<FloatingElement>) => void, deleteEl: () => void, data: ReportData }) {
-  const el = elements.find(e => e.id === selectedElementId);
-  if (!el) return null;
+function PageToolbar({ 
+  activeSectionId, 
+  data, 
+  onUpdateSection
+}: { 
+  activeSectionId: string | null, 
+  data: ReportData,
+  onUpdateSection: (id: string, updates: any) => void
+}) {
+  const section = data.sections.find(s => s.id === activeSectionId);
+  if (!section) return null;
 
   return (
-    <div className="sticky top-4 z-[60] bg-white shadow-xl rounded-2xl border border-stone-200 p-1.5 flex items-center gap-2 mb-4">
-      <div className="flex items-center gap-1 border-r border-stone-100 pr-2">
+    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] bg-stone-900 text-white shadow-2xl rounded-2xl border border-white/10 p-1.5 flex items-center gap-1 min-w-[300px] h-12">
+      <div className="px-3 border-r border-white/10 h-6 flex items-center">
+        <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Page</span>
+      </div>
+
+      <div className="flex items-center gap-0.5 px-2">
+        <div className="relative group">
+          <button 
+            className="w-7 h-7 rounded-full border-2 border-white/20 shadow-inner flex items-center justify-center bg-stone-800"
+            style={{ backgroundColor: section.bgImage ? 'transparent' : data.themeColor }}
+          >
+            <Palette size={14} className="text-white/60" />
+            <input 
+              type="color" 
+              value={data.themeColor} 
+              onChange={(e) => onUpdateSection(section.id, { themeColor: e.target.value })}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            />
+          </button>
+        </div>
+        <span className="text-[10px] font-black uppercase opacity-60 ml-2">Canvas Color</span>
+      </div>
+
+      <div className="w-px h-6 bg-white/10 mx-1" />
+
+      <button className="h-9 px-3 rounded-xl hover:bg-white/10 transition-colors text-[10px] font-black uppercase flex items-center gap-2">
+        <Sparkles size={14} className="text-mustard" />
+        Animate
+      </button>
+
+      <div className="flex-1" />
+
+      <div className="w-px h-6 bg-white/10 mx-1" />
+      
+      <div className="flex items-center gap-1 px-2">
+        <span className="text-[10px] font-black uppercase opacity-40">Dur: 5.0s</span>
+      </div>
+    </div>
+  );
+}
+
+function ContextToolbar({ 
+  selectedElementId, 
+  elements, 
+  updateEl, 
+  deleteEl, 
+  data,
+  updateTemplateStyle
+}: { 
+  selectedElementId: string | null, 
+  elements: FloatingElement[], 
+  updateEl: (id: string, updates: Partial<FloatingElement>) => void, 
+  deleteEl: () => void, 
+  data: ReportData,
+  updateTemplateStyle: (id: string, updates: Partial<TemplateStyle>) => void
+}) {
+  const isFloating = selectedElementId?.startsWith('fe-');
+  const isTemplate = selectedElementId?.startsWith('template-');
+  
+  const el = isFloating ? elements.find(e => e.id === selectedElementId) : null;
+  const tStyle = isTemplate ? data.templateStyles?.[selectedElementId!] : null;
+
+  if (!el && !tStyle) return null;
+
+  const currentType = el?.type || 'text';
+  const currentColor = el?.color || tStyle?.color || '#000000';
+  const currentFlipH = el?.flipH || tStyle?.flipH || false;
+  const currentFlipV = el?.flipV || tStyle?.flipV || false;
+  const currentBgRemoved = el?.isBgRemoved || false;
+
+  const update = (updates: any) => {
+    if (isFloating && selectedElementId) {
+      updateEl(selectedElementId, updates);
+    } else if (isTemplate && selectedElementId) {
+      updateTemplateStyle(selectedElementId, updates);
+    }
+  };
+
+  const handleAlign = (type: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
+    // Basic canvas reference
+    const canvas = document.getElementById('report-preview-area');
+    if (!canvas) return;
+    const { width, height } = canvas.getBoundingClientRect();
+    
+    // Zoom factor correction for absolute coordinates if needed
+    // But since the elements are relative to the canvas container, 
+    // we can use standard alignment based on width/height
+    
+    const elWidth = el?.width || tStyle?.width || 0;
+    const elHeight = el?.height || tStyle?.height || 0;
+    
+    let updates = {};
+    switch (type) {
+      case 'left': updates = { left: 0 }; break;
+      case 'center': updates = { left: (width - elWidth) / 2 }; break;
+      case 'right': updates = { left: width - elWidth }; break;
+      case 'top': updates = { top: 0 }; break;
+      case 'middle': updates = { top: (height - elHeight) / 2 }; break;
+      case 'bottom': updates = { top: height - elHeight }; break;
+    }
+    update(updates);
+  };
+
+  return (
+    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] bg-stone-900 text-white shadow-2xl rounded-2xl border border-white/10 p-1.5 flex items-center gap-1 min-w-[400px] h-12">
+      <div className="px-3 border-r border-white/10 h-6 flex items-center">
+        <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Edit</span>
+      </div>
+
+      {/* Basic Actions */}
+      <div className="flex items-center gap-0.5 px-2">
         <button 
-          onClick={() => updateEl(el.id, { fontStyle: el.fontStyle === 'italic' ? 'normal' : 'italic' })}
-          className={cn("p-2 rounded-lg transition-colors", el.fontStyle === 'italic' ? "bg-mustard/10 text-mustard" : "hover:bg-stone-100")}
+          onClick={() => update({ isBgRemoved: !currentBgRemoved })}
+          className={cn("h-9 px-3 rounded-xl transition-colors text-[10px] font-black uppercase flex items-center gap-2", currentBgRemoved ? "bg-mustard text-stone-900" : "hover:bg-white/10")}
         >
-          <Type size={16} className="italic" />
+          <Wand size={14} className={currentBgRemoved ? "text-stone-900" : "text-mustard"} />
+          BG Remover
         </button>
         <button 
-          onClick={() => updateEl(el.id, { fontWeight: el.fontWeight === 'bold' ? 'normal' : 'bold' })}
-          className={cn("p-2 rounded-lg transition-colors", el.fontWeight === 'bold' ? "bg-mustard/10 text-mustard" : "hover:bg-stone-100")}
+          onClick={deleteEl}
+          className="h-9 px-3 rounded-xl hover:bg-white/10 transition-colors text-[10px] font-black uppercase flex items-center gap-2"
         >
-          <span className="font-bold">B</span>
+          <Eraser size={14} className="text-white/60" />
+          Eraser
         </button>
       </div>
 
-      {el.type === 'text' && (
-        <div className="flex items-center gap-2 border-r border-stone-100 pr-2">
-          <input 
-             type="number" 
-             value={el.fontSize || 16} 
-             onChange={(e) => updateEl(el.id, { fontSize: parseInt(e.target.value) })}
-             className="w-12 bg-stone-50 rounded px-1 py-1 text-xs font-bold text-center border border-stone-200"
-          />
-          <div className="flex bg-stone-50 rounded-lg p-0.5 border border-stone-200">
-            {['left', 'center', 'right'].map(a => (
-              <button 
-                key={a}
-                onClick={() => updateEl(el.id, { textAlign: a as any })}
-                className={cn("w-6 h-6 flex items-center justify-center rounded transition-colors text-[10px]", el.textAlign === a ? "bg-white shadow-sm" : "text-stone-400")}
-              >
-                {a[0].toUpperCase()}
-              </button>
-            ))}
-          </div>
+      <div className="w-px h-6 bg-white/10 mx-1" />
+
+      {/* Color Picker Placeholder */}
+      <div className="px-2 flex items-center gap-2">
+        <div className="relative group">
+          <button 
+            className="w-7 h-7 rounded-full border-2 border-white/20 shadow-inner flex items-center justify-center overflow-hidden"
+            style={{ backgroundColor: currentColor }}
+          >
+            <input 
+              type="color" 
+              value={currentColor} 
+              onChange={(e) => update({ color: e.target.value })}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            />
+          </button>
+        </div>
+      </div>
+
+      <div className="w-px h-6 bg-white/10 mx-1" />
+
+      {/* Flip Controls */}
+      <div className="flex items-center gap-0.5 px-1">
+        <button 
+          onClick={() => update({ flipH: !currentFlipH })}
+          className={cn("p-2 rounded-xl transition-colors", currentFlipH ? "bg-mustard text-stone-900" : "hover:bg-white/10 text-white/60")}
+          title="Flip Horizontal"
+        >
+          <FlipHorizontal size={16} />
+        </button>
+        <button 
+          onClick={() => update({ flipV: !currentFlipV })}
+          className={cn("p-2 rounded-xl transition-colors", currentFlipV ? "bg-mustard text-stone-900" : "hover:bg-white/10 text-white/60")}
+          title="Flip Vertical"
+        >
+          <FlipVertical size={16} />
+        </button>
+      </div>
+
+      <div className="w-px h-6 bg-white/10 mx-1" />
+
+      {/* Text Style (if applicable) */}
+      {(currentType === 'text' || isTemplate) && (
+        <div className="flex items-center gap-0.5 px-1">
+          <button 
+            onClick={() => update({ fontWeight: (el?.fontWeight === 'bold' || tStyle?.fontWeight === 'bold') ? 'normal' : 'bold' })}
+            className={cn("w-9 h-9 flex items-center justify-center rounded-xl transition-colors text-sm font-black", (el?.fontWeight === 'bold' || tStyle?.fontWeight === 'bold') ? "bg-white/20" : "hover:bg-white/10 opacity-60")}
+          >
+            B
+          </button>
         </div>
       )}
 
-      <div className="flex items-center gap-2 border-r border-stone-100 pr-2">
-         <div className="w-6 h-6 rounded border border-stone-200 overflow-hidden relative shadow-sm">
-            <input 
-              type="color" 
-              value={el.color || '#000000'} 
-              onChange={(e) => updateEl(el.id, { color: e.target.value })}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-            <div className="w-full h-full" style={{ backgroundColor: el.color || '#000' }} />
-         </div>
-      </div>
-
-      <div className="flex items-center gap-1 border-r border-stone-100 pr-2">
+      {/* Layering Controls */}
+      <div className="flex items-center gap-0.5 px-1">
         <button 
-          onClick={() => updateEl(el.id, { zIndex: (el.zIndex || 0) + 1 })}
-          className="p-2 hover:bg-stone-100 rounded-lg text-stone-500 transition-colors"
+          onClick={() => update({ zIndex: (el?.zIndex || 0) + 1 })}
+          className="p-2 hover:bg-white/10 rounded-xl text-white/60 transition-colors"
           title="Bring Forward"
         >
-          <ChevronUp size={14} />
+          <ChevronUp size={16} />
         </button>
         <button 
-          onClick={() => updateEl(el.id, { zIndex: Math.max(0, (el.zIndex || 0) - 1) })}
-          className="p-2 hover:bg-stone-100 rounded-lg text-stone-500 transition-colors"
+          onClick={() => update({ zIndex: Math.max(0, (el?.zIndex || 0) - 1) })}
+          className="p-2 hover:bg-white/10 rounded-xl text-white/60 transition-colors"
           title="Send Backward"
         >
-          <ChevronDown size={14} />
+          <ChevronDown size={16} />
         </button>
       </div>
 
+      <div className="w-px h-6 bg-white/10 mx-1" />
+
+      {/* Position/Alignment */}
+      <div className="flex items-center gap-0.5 px-1">
+        <div className="group relative">
+           <button className="h-9 px-3 rounded-xl hover:bg-white/10 transition-colors text-[10px] font-black uppercase flex items-center gap-2">
+            <LayersIcon size={14} className="text-white/60" />
+            Position
+          </button>
+          <div className="absolute top-full left-0 mt-2 bg-stone-900 border border-white/10 rounded-xl shadow-2xl p-2 hidden group-hover:block z-[200] min-w-[240px]">
+             <div className="grid grid-cols-2 gap-2 text-[8px] font-black uppercase tracking-tighter">
+                <button onClick={() => handleAlign('left')} className="p-2 hover:bg-white/10 rounded flex items-center gap-2"><AlignLeft size={12}/> Align Left</button>
+                <button onClick={() => handleAlign('center')} className="p-2 hover:bg-white/10 rounded flex items-center gap-2"><AlignCenter size={12}/> Center</button>
+                <button onClick={() => handleAlign('right')} className="p-2 hover:bg-white/10 rounded flex items-center gap-2"><AlignRight size={12}/> Align Right</button>
+                <button onClick={() => handleAlign('top')} className="p-2 hover:bg-white/10 rounded flex items-center gap-2"><ArrowUpToLine size={12}/> Top</button>
+                <button onClick={() => handleAlign('middle')} className="p-2 hover:bg-white/10 rounded flex items-center gap-2"><AlignCenter size={12} className="rotate-90"/> Middle</button>
+                <button onClick={() => handleAlign('bottom')} className="p-2 hover:bg-white/10 rounded flex items-center gap-2"><ArrowDownToLine size={12}/> Bottom</button>
+             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1" />
+
+      <div className="w-px h-6 bg-white/10 mx-1" />
+
+      {/* Trash */}
       <button 
         onClick={deleteEl}
-        className="p-2 hover:bg-red-50 rounded-lg text-stone-400 hover:text-red-500 transition-colors"
+        className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-red-500/20 text-white/40 hover:text-red-500 transition-all group"
       >
-        <Trash2 size={16} />
+        <Trash2 size={16} className="group-hover:scale-110 transition-transform" />
       </button>
     </div>
   );
@@ -925,13 +1103,51 @@ export default function App() {
   const [loadingMessage, setLoadingMessage] = useState('Loading...');
   const [copySuccess, setCopySuccess] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<'design' | 'elements' | 'templates' | 'text' | 'uploads' | 'pages' | 'export' | 'inspector' | 'brand' | 'tools' | 'apps'>('templates');
+  const [zoom, setZoom] = useState(0.85);
+
+  const [history, setHistory] = useState<ReportData[]>([]);
+  const [redoStack, setRedoStack] = useState<ReportData[]>([]);
+  const [clipboard, setClipboard] = useState<FloatingElement | null>(null);
+
+  const pushToHistory = useCallback((stateToSave: ReportData) => {
+    setHistory(prev => [...prev.slice(-49), stateToSave]);
+    setRedoStack([]);
+  }, []);
+
+  const updateReportData = useCallback((updates: Partial<ReportData> | ((prev: ReportData) => ReportData), saveToHistory = true) => {
+    if (saveToHistory) {
+      pushToHistory(data);
+    }
+    setData(prev => {
+      if (typeof updates === 'function') {
+        return updates(prev);
+      }
+      return { ...prev, ...updates };
+    });
+  }, [data, pushToHistory]);
+
+  const undo = useCallback(() => {
+    if (history.length === 0) return;
+    const previous = history[history.length - 1];
+    setRedoStack(prev => [data, ...prev]);
+    setHistory(prev => prev.slice(0, -1));
+    setData(previous);
+  }, [history, data]);
+
+  const redo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[0];
+    setHistory(prev => [...prev, data]);
+    setRedoStack(prev => prev.slice(1));
+    setData(next);
+  }, [redoStack, data]);
+
+  const [sidebarTab, setSidebarTab] = useState<'design' | 'elements' | 'templates' | 'text' | 'layers' | 'uploads' | 'pages' | 'export' | 'inspector' | 'brand' | 'tools' | 'apps'>('templates');
   const [toolSubView, setToolSubView] = useState<'main' | 'magic' | 'resize' | 'styles'>('main');
   const [magicPrompt, setMagicPrompt] = useState('');
   const [magicLoading, setMagicLoading] = useState(false);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
   const [elementsSubTab, setElementsSubTab] = useState<'graphics' | 'photos'>('graphics');
   const [unsplashQuery, setUnsplashQuery] = useState('');
   const [unsplashResults, setUnsplashResults] = useState<any[]>([]);
@@ -1104,48 +1320,11 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
+   useEffect(() => {
     if (elementsSubTab === 'photos' && unsplashResults.length === 0) {
       fetchUnsplash('', true);
     }
   }, [elementsSubTab]);
-
-  const [history, setHistory] = useState<ReportData[]>([]);
-  const [redoStack, setRedoStack] = useState<ReportData[]>([]);
-  const [clipboard, setClipboard] = useState<FloatingElement | null>(null);
-
-  const pushToHistory = useCallback((stateToSave: ReportData) => {
-    setHistory(prev => [...prev.slice(-49), stateToSave]);
-    setRedoStack([]);
-  }, []);
-
-  const updateReportData = useCallback((updates: Partial<ReportData> | ((prev: ReportData) => ReportData), saveToHistory = true) => {
-    if (saveToHistory) {
-      pushToHistory(data);
-    }
-    setData(prev => {
-      if (typeof updates === 'function') {
-        return updates(prev);
-      }
-      return { ...prev, ...updates };
-    });
-  }, [data, pushToHistory]);
-
-  const undo = useCallback(() => {
-    if (history.length === 0) return;
-    const previous = history[history.length - 1];
-    setRedoStack(prev => [data, ...prev]);
-    setHistory(prev => prev.slice(0, -1));
-    setData(previous);
-  }, [history, data]);
-
-  const redo = useCallback(() => {
-    if (redoStack.length === 0) return;
-    const next = redoStack[0];
-    setHistory(prev => [...prev, data]);
-    setRedoStack(prev => prev.slice(1));
-    setData(next);
-  }, [redoStack, data]);
 
   const copyElement = useCallback(() => {
     const el = data.floatingElements?.find(e => e.id === selectedElementId);
@@ -1180,7 +1359,7 @@ export default function App() {
       left: el.left + 20,
       zIndex: (data.floatingElements?.length || 0) + 1
     };
-    setData(prev => ({
+    updateReportData(prev => ({
       ...prev,
       floatingElements: [...(prev.floatingElements || []), newEl]
     }));
@@ -1294,21 +1473,20 @@ export default function App() {
     handleSelectElement(newEl.id);
   };
 
-  const updateElement = (id: string, updates: Partial<FloatingElement>) => {
-    const isLayoutChange = Object.keys(updates).some(k => ['top', 'left', 'width', 'height', 'rotation'].includes(k));
-    setData(prev => {
+  const updateElement = (id: string, updates: Partial<FloatingElement>, saveToHistory = true) => {
+    updateReportData(prev => {
       const copy = [...(prev.floatingElements || [])];
       const idx = copy.findIndex(e => e.id === id);
       if (idx !== -1) {
         copy[idx] = { ...copy[idx], ...updates };
       }
       return { ...prev, floatingElements: copy };
-    });
+    }, saveToHistory);
   };
 
   const handleDeleteElement = () => {
     if (!selectedElementId) return;
-    setData(prev => ({
+    updateReportData(prev => ({
       ...prev,
       floatingElements: (prev.floatingElements || []).filter(e => e.id !== selectedElementId)
     }));
@@ -1337,14 +1515,14 @@ export default function App() {
     }
   };
 
-  const updateTemplateStyle = (id: string, updates: Partial<TemplateStyle>) => {
-    setData(prev => ({
+  const updateTemplateStyle = (id: string, updates: Partial<TemplateStyle>, saveToHistory = true) => {
+    updateReportData(prev => ({
       ...prev,
       templateStyles: {
         ...(prev.templateStyles || {}),
         [id]: { ...(prev.templateStyles?.[id] || {}), ...updates }
       }
-    }));
+    }), saveToHistory);
   };
 
   const handleSelection = (sectionId: string | null) => {
@@ -1356,31 +1534,7 @@ export default function App() {
   };
 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
-
-  const performSave = useCallback(
-    debounce(async (currentData: ReportData, currentId: string | null) => {
-      if (!user || isViewerMode) return;
-      try {
-        const id = await saveReport(currentId, currentData);
-        if (id && id !== currentId) {
-          setReportId(id);
-          // Update URL without refreshing
-          const newUrl = `${window.location.pathname}?reportId=${id}`;
-          window.history.pushState({ path: newUrl }, '', newUrl);
-        }
-        setLastSaved(new Date());
-      } catch (err) {
-        console.error("Auto-save failed", err);
-      }
-    }, 2000),
-    [user, isViewerMode]
-  );
-
-  useEffect(() => {
-    if (view === 'editor' && !isViewerMode) {
-      performSave(data, reportId);
-    }
-  }, [data, view, isViewerMode, reportId]);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   useEffect(() => {
@@ -1556,45 +1710,122 @@ export default function App() {
     loadReport(id);
   };
 
+  const renderLayersTab = () => (
+    <div className="space-y-6">
+      <section className="space-y-4">
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Floating Elements</h3>
+        <div className="space-y-2">
+          {(data.floatingElements || []).slice().reverse().map((el) => (
+            <button 
+              key={el.id}
+              onClick={() => handleSelectElement(el.id)}
+              className={cn(
+                "w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left",
+                selectedElementId === el.id ? "bg-mustard/10 border-mustard text-mustard" : "bg-white border-stone-100 hover:border-stone-200"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <LayersIcon size={14} className="opacity-40" />
+                <span className="text-[10px] font-bold uppercase truncate max-w-[120px]">
+                  {el.type === 'text' ? el.content?.substring(0, 20) || 'Text Element' : el.type}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); updateElement(el.id, { zIndex: (el.zIndex || 0) + 1 }); }}
+                  className="p-1 hover:bg-black/5 rounded"
+                >
+                  <ChevronUp size={12} />
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); updateElement(el.id, { zIndex: Math.max(0, (el.zIndex || 0) - 1) }); }}
+                  className="p-1 hover:bg-black/5 rounded"
+                >
+                  <ChevronDown size={12} />
+                </button>
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+
   const renderTemplatesTab = () => (
     <div className="space-y-8">
        <section className="space-y-4">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Professional Templates</h3>
+          <div className="flex justify-between items-center px-1">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Professional Templates</h3>
+            <span className="text-[8px] font-bold text-mustard bg-mustard/10 px-2 py-0.5 rounded-full uppercase">New</span>
+          </div>
           <div className="grid grid-cols-1 gap-4">
              {[
-               { id: 'marketing', name: 'Email Marketing', desc: 'Case study & detailed metrics', color: '#EBB33D', icon: <Mail size={24}/> },
-               { id: 'saas', name: 'SaaS Dashboard', desc: 'SaaS operational overview', color: '#1a1a1a', icon: <Cpu size={24}/> },
-               { id: 'minimal', name: 'Minimalist', desc: 'Clean, spacious design', color: '#ffffff', icon: <Minimize size={24}/> },
+               { id: 'marketing', name: 'Email Marketing', desc: 'Case study & metrics', color: '#EBB33D', icon: <Mail size={22}/>, 
+                 sections: [{id: 's1', type: 'cover'}, {id: 's2', type: 'metrics_overview'}, {id: 's3', type: 'report_main'}, {id: 's4', type: 'distribution'}, {id: 's5', type: 'performance'}] },
+               { id: 'growth', name: 'Growth Engine', desc: 'Scale & Acquisition', color: '#FF5722', icon: <Rocket size={22}/>,
+                 sections: [{id: 's1', type: 'cover'}, {id: 's2', type: 'growth'}, {id: 's3', type: 'trends'}, {id: 's4', type: 'performance'}, {id: 's5', type: 'funnel'}] },
+               { id: 'saas', name: 'SaaS Operational', desc: 'Churn & MRR Metrics', color: '#1a1a1a', icon: <Cpu size={22}/>,
+                 sections: [{id: 's1', type: 'cover'}, {id: 's2', type: 'overview'}, {id: 's3', type: 'funnel'}, {id: 's4', type: 'metrics'}] },
+               { id: 'corporate', name: 'Enterprise Blue', desc: 'Board-ready report', color: '#2563EB', icon: <Shield size={22}/>,
+                 sections: [{id: 's1', type: 'cover'}, {id: 's2', type: 'goals'}, {id: 's3', type: 'table'}, {id: 's4', type: 'metrics_overview'}] },
+               { id: 'midnight', name: 'Midnight Tech', desc: 'Dark-mode analytics', color: '#8B5CF6', icon: <Zap size={22}/>,
+                 sections: [{id: 's1', type: 'cover'}, {id: 's2', type: 'metrics_overview'}, {id: 's3', type: 'distribution'}] },
+               { id: 'minimal', name: 'Minimalist', desc: 'Essential views only', color: '#78716c', icon: <Minimize size={22}/>,
+                 sections: [{id: 's1', type: 'cover'}, {id: 's2', type: 'overview'}, {id: 's3', type: 'metrics_overview'}] },
+               { id: 'swiss', name: 'Swiss Modern', desc: 'Grid-based typography', color: '#E11D48', icon: <Grid3X3 size={22}/>,
+                 sections: [{id: 's1', type: 'cover'}, {id: 's2', type: 'grid_metrics'}, {id: 's3', type: 'performance'}] },
+               { id: 'furniture', name: 'Furniture Ad', desc: 'Sleek product showcase', color: '#a8a29e', icon: <Box size={22}/>,
+                 sections: [{id: 's1', type: 'cover'}, {id: 's2', type: 'grid_metrics'}, {id: 's3', type: 'brands'}, {id: 's4', type: 'details'}] },
+               { id: 'shopify', name: 'Shopify Banner', desc: 'Conversion focused', color: '#95bf47', icon: <LayoutTemplate size={22}/>,
+                 sections: [{id: 's1', type: 'cover'}, {id: 's2', type: 'metrics'}, {id: 's3', type: 'funnel'}, {id: 's4', type: 'overview'}] },
+               { id: 'islamic', name: 'Kids Content', desc: 'Playful & educational', color: '#facc15', icon: <Smile size={22}/>,
+                 sections: [{id: 's1', type: 'cover'}, {id: 's2', type: 'grid_metrics'}] },
              ].map((tpl) => (
                 <button 
                   key={tpl.id}
                   onClick={() => {
-                    // Set template specific sections
-                    const sections: ReportData['sections'] = tpl.id === 'minimal' ? [
-                      { id: 'sec-cover', type: 'cover' },
-                      { id: 'sec-overview', type: 'metrics_overview' }
-                    ] : [
-                      { id: 'sec-cover', type: 'cover' },
-                      { id: 'sec-overview', type: 'metrics_overview' },
-                      { id: 'sec-main', type: 'report_main' },
-                      { id: 'sec-dist', type: 'distribution' }
-                    ];
-                    setData({ ...data, sections, themeColor: tpl.color });
+                    const newSections: ReportData['sections'] = tpl.sections.map(s => ({ 
+                      id: `sec-${Math.random().toString(36).substr(2, 9)}`, 
+                      type: s.type as any 
+                    }));
+                    
+                    let extraData = {};
+                    if (tpl.id === 'furniture') {
+                      extraData = { reportTitle: 'Premium Furniture Showcase', overviewTitle: 'Modern\nInteriors' };
+                    } else if (tpl.id === 'shopify') {
+                      extraData = { reportTitle: 'Store Performance Report', overviewTitle: 'Monthly\nSales' };
+                    } else if (tpl.id === 'islamic') {
+                      extraData = { reportTitle: 'Islamic Kids Education', overviewTitle: 'Let\'s\nLearn' };
+                    }
+
+                    updateReportData({ 
+                      sections: newSections, 
+                      themeColor: tpl.color,
+                      templateStyles: {},
+                      floatingElements: [], // Reset elements for fresh template
+                      orientation: tpl.id === 'shopify' ? 'landscape' : 'portrait', // Some templates work better in landscape
+                      ...extraData
+                    });
+                    setSidebarTab('inspector'); // Switch to inspector to show page settings
+                    handleSelectElement(null); // Select the page background by default
                   }}
-                  className="group relative overflow-hidden bg-stone-50 border border-stone-100 rounded-[32px] p-6 text-left transition-all hover:border-mustard hover:shadow-2xl hover:shadow-mustard/10 active:scale-[0.98]"
+                  className="group relative overflow-hidden bg-stone-50 border border-stone-100 rounded-[32px] p-5 text-left transition-all hover:border-mustard hover:shadow-2xl hover:shadow-mustard/10 active:scale-[0.98]"
                 >
-                   <div className="flex gap-4 items-center mb-4">
-                      <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-stone-400 group-hover:text-mustard transition-colors">
+                   <div className="flex gap-4 items-center mb-3">
+                      <div className="w-10 h-10 rounded-2xl bg-white shadow-sm flex items-center justify-center text-stone-400 group-hover:text-mustard transition-colors">
                         {tpl.icon}
                       </div>
                       <div>
                         <h4 className="text-xs font-black uppercase text-stone-900 leading-none mb-1">{tpl.name}</h4>
-                        <p className="text-[8px] font-bold text-stone-400 uppercase tracking-widest">{tpl.desc}</p>
+                        <p className="text-[8px] font-bold text-stone-400 uppercase tracking-widest leading-none">{tpl.desc}</p>
                       </div>
                    </div>
-                   <div className="flex -space-x-2">
-                      <div className="w-8 h-8 rounded-full border-2 border-white" style={{ backgroundColor: tpl.color }} />
-                      <div className="w-8 h-8 rounded-full bg-stone-200 border-2 border-white" />
+                   <div className="flex justify-between items-center">
+                      <div className="flex -space-x-1.5 ">
+                        <div className="w-6 h-6 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: tpl.color }} />
+                        <div className="w-6 h-6 rounded-full bg-stone-200 border-2 border-white shadow-sm" />
+                      </div>
+                      <ChevronRight size={14} className="text-stone-300 group-hover:text-mustard translate-x--2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
                    </div>
                 </button>
              ))}
@@ -1602,21 +1833,21 @@ export default function App() {
        </section>
 
        <section className="space-y-4">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Page Presets</h3>
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Quick Page Add</h3>
           <div className="grid grid-cols-2 gap-3">
              {[
-               { type: 'cover', icon: <FileText size={20}/>, label: 'Cover Page' },
-               { type: 'metrics_overview', icon: <MousePointerClick size={20}/>, label: 'Metrics' },
-               { type: 'report_main', icon: <LayoutDashboard size={20}/>, label: 'Main Repo' },
-               { type: 'distribution' as const, icon: <PieChartIcon size={20}/>, label: 'Charts' },
+               { type: 'cover', icon: <FileText size={18}/>, label: 'Cover' },
+               { type: 'metrics_overview', icon: <MousePointerClick size={18}/>, label: 'Stats' },
+               { type: 'report_main', icon: <LayoutDashboard size={18}/>, label: 'Main' },
+               { type: 'distribution' as const, icon: <PieChartIcon size={18}/>, label: 'Charts' },
              ].map((preset) => (
                 <button 
                   key={preset.type}
                   onClick={() => addSection(preset.type)}
-                  className="flex flex-col items-center justify-center gap-2 p-4 bg-white border border-stone-100 rounded-2xl hover:border-mustard transition-all active:scale-95 group shadow-sm"
+                  className="flex flex-col items-center justify-center gap-2 p-3 bg-white border border-stone-100 rounded-2xl hover:border-mustard transition-all active:scale-95 group shadow-sm"
                 >
                   <div className="text-stone-300 group-hover:text-mustard transition-colors">{preset.icon}</div>
-                  <span className="text-[9px] font-black uppercase text-stone-500">{preset.label}</span>
+                  <span className="text-[8px] font-black uppercase text-stone-500">{preset.label}</span>
                 </button>
              ))}
           </div>
@@ -1637,7 +1868,7 @@ export default function App() {
           ].map((theme) => (
             <button 
               key={theme.name}
-              onClick={() => setData({ ...data, themeColor: theme.primary, accentColor: theme.accent })}
+              onClick={() => updateReportData({ themeColor: theme.primary, accentColor: theme.accent })}
               className="group text-left space-y-2 p-3 rounded-2xl border border-stone-100 hover:border-mustard transition-all bg-white shadow-sm"
             >
               <div className="flex h-6 rounded-full overflow-hidden">
@@ -1655,11 +1886,11 @@ export default function App() {
         <div className="grid grid-cols-2 gap-3 pb-2 border-b border-stone-50">
           <div className="space-y-1">
             <label className="text-[9px] uppercase font-bold text-stone-500">Theme</label>
-            <input type="color" value={data.themeColor} onChange={(e) => setData({...data, themeColor: e.target.value})} className="w-full h-10 rounded-lg border border-stone-200 cursor-pointer" />
+            <input type="color" value={data.themeColor} onChange={(e) => updateReportData({ themeColor: e.target.value })} className="w-full h-10 rounded-lg border border-stone-200 cursor-pointer" />
           </div>
           <div className="space-y-1">
             <label className="text-[9px] uppercase font-bold text-stone-500">Accent</label>
-            <input type="color" value={data.accentColor} onChange={(e) => setData({...data, accentColor: e.target.value})} className="w-full h-10 rounded-lg border border-stone-200 cursor-pointer" />
+            <input type="color" value={data.accentColor} onChange={(e) => updateReportData({ accentColor: e.target.value })} className="w-full h-10 rounded-lg border border-stone-200 cursor-pointer" />
           </div>
         </div>
       </section>
@@ -1708,6 +1939,24 @@ export default function App() {
               </button>
             ))}
           </div>
+
+          <section className="space-y-4 pt-6 border-t border-stone-50">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Branding Rules</h3>
+            <button 
+              onClick={() => updateReportData({ templateStyles: { ...data.templateStyles, 'all': { ...data.templateStyles?.['all'], fontWeight: 'bold' } } })}
+              className="w-full h-12 flex items-center justify-between px-4 bg-stone-50 rounded-2xl hover:bg-stone-100 transition-all border border-stone-100 group"
+            >
+              <span className="text-[10px] font-black uppercase text-stone-600">Force Bold Text</span>
+              <ChevronRight size={14} className="text-stone-300" />
+            </button>
+            <button 
+              onClick={() => updateReportData({ templateStyles: { ...data.templateStyles, 'all': { ...data.templateStyles?.['all'], opacity: 0.8 } } })}
+              className="w-full h-12 flex items-center justify-between px-4 bg-stone-50 rounded-2xl hover:bg-stone-100 transition-all border border-stone-100 group"
+            >
+              <span className="text-[10px] font-black uppercase text-stone-600">Global Fade</span>
+              <ChevronRight size={14} className="text-stone-300" />
+            </button>
+          </section>
         </div>
       </section>
     </div>
@@ -1763,6 +2012,29 @@ export default function App() {
                   {shape.icon}
                 </button>
               ))}
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Niche Assets</h3>
+            <div className="grid grid-cols-2 gap-3">
+               {[
+                 { id: 'a1', name: 'Furniture', img: 'https://images.unsplash.com/photo-1592078615290-033ee584e267?w=400' },
+                 { id: 'a2', name: 'Interior', img: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=400' },
+                 { id: 'a3', name: 'Islamic', img: 'https://images.unsplash.com/photo-1584441405886-bc91b21919a7?w=400' },
+                 { id: 'a4', name: 'Shopify', img: 'https://images.unsplash.com/photo-1556742044-3c52d6e88c62?w=400' },
+               ].map((asset) => (
+                 <button 
+                   key={asset.id}
+                   onClick={() => addElement('image', asset.img)}
+                   className="group relative aspect-square bg-stone-100 rounded-2xl overflow-hidden hover:ring-2 hover:ring-mustard transition-all shadow-sm"
+                 >
+                   <img src={asset.img} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                   <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <PlusSquare size={14} className="text-white" />
+                   </div>
+                 </button>
+               ))}
             </div>
           </section>
 
@@ -2147,6 +2419,24 @@ export default function App() {
     if (!el) return (
       <div className="space-y-8 px-1">
         <section className="space-y-4">
+           <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Page Background</h3>
+           <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                 <label className="text-[9px] uppercase font-bold text-stone-500">Global Background</label>
+                 <div className="h-12 rounded-xl border border-stone-100 bg-white relative overflow-hidden shadow-sm">
+                    <input type="color" value={data.themeColor} onChange={e => updateReportData({ themeColor: e.target.value })} className="absolute inset-[-10px] w-[200%] h-[200%] cursor-pointer" />
+                 </div>
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[9px] uppercase font-bold text-stone-500">Accent Color</label>
+                 <div className="h-12 rounded-xl border border-stone-100 bg-white relative overflow-hidden shadow-sm">
+                    <input type="color" value={data.accentColor} onChange={e => updateReportData({ accentColor: e.target.value })} className="absolute inset-[-10px] w-[200%] h-[200%] cursor-pointer" />
+                 </div>
+              </div>
+           </div>
+        </section>
+
+        <section className="space-y-4">
            <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Canvas Settings</h3>
            <div className="p-6 bg-stone-900 rounded-[32px] border border-stone-800">
               <div className="flex items-center gap-4 mb-6">
@@ -2175,24 +2465,6 @@ export default function App() {
                  >
                     <FileText size={14}/> Convert to A4
                  </button>
-              </div>
-           </div>
-        </section>
-
-        <section className="space-y-4">
-           <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Background</h3>
-           <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                 <label className="text-[9px] uppercase font-bold text-stone-500">Theme Color</label>
-                 <div className="h-12 rounded-xl border border-stone-800 relative overflow-hidden">
-                    <input type="color" value={data.themeColor} onChange={e => updateReportData({ themeColor: e.target.value })} className="absolute inset-[-10px] w-[200%] h-[200%] cursor-pointer" />
-                 </div>
-              </div>
-              <div className="space-y-2">
-                 <label className="text-[9px] uppercase font-bold text-stone-500">Accent Color</label>
-                 <div className="h-12 rounded-xl border border-stone-800 relative overflow-hidden">
-                    <input type="color" value={data.accentColor} onChange={e => updateReportData({ accentColor: e.target.value })} className="absolute inset-[-10px] w-[200%] h-[200%] cursor-pointer" />
-                 </div>
               </div>
            </div>
         </section>
@@ -2266,11 +2538,29 @@ export default function App() {
         <section className="space-y-3">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Layering</h3>
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => updateEl({ zIndex: (el.zIndex || 0) + 1 })} className="h-10 bg-stone-50 border border-stone-200 rounded-xl text-[9px] font-black uppercase hover:bg-white transition-all flex items-center justify-center gap-2">
-               <ChevronUp size={14}/> Bring Forward
+            <button onClick={() => updateEl({ zIndex: (el.zIndex || 0) + 1 })} className="h-10 bg-stone-50 border border-stone-200 rounded-xl text-[9px] font-black uppercase hover:bg-white transition-all flex items-center justify-center gap-1 group">
+               <ChevronUp size={14} className="group-hover:text-mustard transition-colors"/> Up
             </button>
-            <button onClick={() => updateEl({ zIndex: Math.max(0, (el.zIndex || 0) - 1) })} className="h-10 bg-stone-50 border border-stone-200 rounded-xl text-[9px] font-black uppercase hover:bg-white transition-all flex items-center justify-center gap-2">
-               <ChevronDown size={14}/> Send Backward
+            <button onClick={() => updateEl({ zIndex: Math.max(0, (el.zIndex || 0) - 1) })} className="h-10 bg-stone-50 border border-stone-200 rounded-xl text-[9px] font-black uppercase hover:bg-white transition-all flex items-center justify-center gap-1 group">
+               <ChevronDown size={14} className="group-hover:text-mustard transition-colors"/> Down
+            </button>
+            <button 
+              onClick={() => {
+                const maxZ = Math.max(...(data.floatingElements?.map(e => e.zIndex || 0) || [0]), 0);
+                updateEl({ zIndex: maxZ + 1 });
+              }} 
+              className="h-10 bg-stone-50 border border-stone-200 rounded-xl text-[9px] font-black uppercase hover:bg-white transition-all flex items-center justify-center gap-1 col-span-2 group"
+            >
+               <ArrowUpToLine size={14} className="group-hover:text-mustard transition-colors"/> Bring to Front
+            </button>
+            <button 
+              onClick={() => {
+                const minZ = Math.min(...(data.floatingElements?.map(e => e.zIndex || 0) || [0]), 0);
+                updateEl({ zIndex: Math.max(0, minZ - 1) });
+              }} 
+              className="h-10 bg-stone-50 border border-stone-200 rounded-xl text-[9px] font-black uppercase hover:bg-white transition-all flex items-center justify-center gap-1 col-span-2 group"
+            >
+               <ArrowDownToLine size={14} className="group-hover:text-mustard transition-colors"/> Send to Back
             </button>
           </div>
         </section>
@@ -2647,7 +2937,7 @@ export default function App() {
       case 'cover':
         return (
           <SectionWrapper key={section.id} id={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-40 flex flex-col relative overflow-hidden" style={containerStyle}>
+            <div className="min-h-[1122px] p-24 md:p-40 flex flex-col relative overflow-hidden" style={containerStyle}>
               {/* Road Path SVG overlay */}
               <div className="absolute right-0 top-0 w-1/2 h-full pointer-events-none opacity-20">
                  <svg viewBox="0 0 400 800" className="w-full h-full fill-none stroke-black stroke-[40] stroke-dasharray-[20,20]">
@@ -2754,7 +3044,7 @@ export default function App() {
       case 'metrics_overview':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-40 flex flex-col justify-center relative overflow-hidden" style={containerStyle}>
+            <div className="min-h-[1122px] p-24 md:p-40 flex flex-col justify-center relative overflow-hidden" style={containerStyle}>
                 <div className="absolute right-0 top-0 w-64 h-full pointer-events-none opacity-10">
                    <svg viewBox="0 0 100 400" className="w-full h-full fill-none stroke-black stroke-[20] stroke-dasharray-[10,10]">
                       <path d="M100,0 C100,100 0,100 0,200 C0,300 100,300 100,400" />
@@ -2828,7 +3118,7 @@ export default function App() {
       case 'report_main':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-40 flex flex-col gap-12 relative overflow-hidden" style={containerStyle}>
+            <div className="min-h-[1122px] p-24 md:p-40 flex flex-col gap-12 relative overflow-hidden" style={containerStyle}>
                 <div className="flex justify-between items-end">
                     <div className="space-y-4">
                        <TemplateTransformWrapper 
@@ -2869,10 +3159,19 @@ export default function App() {
                         </h2>
                        </TemplateTransformWrapper>
                     </div>
-                   <div className="bg-white p-8 rounded-3xl shadow-xl flex items-center gap-6">
-                      <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400">
-                         <CalendarIcon size={32} />
-                      </div>
+                    <div className="bg-white p-8 rounded-3xl shadow-xl flex items-center gap-6">
+                       <TemplateTransformWrapper 
+                        id="template-dateIcon" 
+                        data={data} 
+                        isSelected={selectedElementId === 'template-dateIcon'}
+                        onSelect={() => handleSelectElement('template-dateIcon')}
+                        updateStyle={(u) => updateTemplateStyle('template-dateIcon', u)}
+                        isViewer={isViewerMode}
+                       >
+                        <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400">
+                           <CalendarIcon size={32} />
+                        </div>
+                       </TemplateTransformWrapper>
                       <div>
                          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Date Period</p>
                          <p className="text-xl font-black text-stone-900 leading-none">
@@ -2941,31 +3240,46 @@ export default function App() {
       case 'distribution':
         return (
           <SectionWrapper key={section.id} {...commonProps} style={containerStyle}>
-            <div className="min-h-[750px] p-24 md:p-40 space-y-12 flex flex-col">
-               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-                   {[
-                     { label: "Contact Count", key: 'contactCount', val: data.contactCount, icon: <Users size={28}/>, accent: '#ef4444' },
-                     { label: "Deal Count", key: 'dealCount', val: data.dealCount, icon: <Briefcase size={28}/>, accent: '#1a1a1a' },
-                     { label: "Deals Value", key: 'dealsValue', val: data.dealsValue, icon: <TrendingUp size={28}/>, accent: '#ef4444', prefix: '$' }
-                   ].map((m, i) => (
-                     <div key={i} className="bg-white p-8 rounded-3xl shadow-lg border-2 border-transparent hover:border-red-500 transition-all group pointer-events-auto">
-                        <div className="flex items-center gap-4 mb-4">
-                           <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ backgroundColor: m.accent }}>
-                              {m.icon}
+            <div className="min-h-[1122px] p-24 md:p-40 space-y-12 flex flex-col">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+                    {[
+                      { label: "Contact Count", key: 'contactCount', val: data.contactCount, icon: <Users size={28}/>, accent: '#ef4444' },
+                      { label: "Deal Count", key: 'dealCount', val: data.dealCount, icon: <Briefcase size={28}/>, accent: '#1a1a1a' },
+                      { label: "Deals Value", key: 'dealsValue', val: data.dealsValue, icon: <TrendingUp size={28}/>, accent: '#ef4444', prefix: '$' }
+                    ].map((m, i) => (
+                      <TemplateTransformWrapper 
+                        key={i}
+                        id={`template-dist-metric-${i}`} 
+                        data={data} 
+                        isSelected={selectedElementId === `template-dist-metric-${i}`}
+                        onSelect={() => handleSelectElement(`template-dist-metric-${i}`)}
+                        updateStyle={(u) => updateTemplateStyle(`template-dist-metric-${i}`, u)}
+                        isViewer={isViewerMode}
+                      >
+                        <div 
+                          className="bg-white p-8 rounded-3xl shadow-lg border-2 border-transparent hover:border-red-500 transition-all group pointer-events-auto"
+                          style={{ 
+                            color: data.templateStyles?.[`template-dist-metric-${i}`]?.color || undefined,
+                          }}
+                        >
+                           <div className="flex items-center gap-4 mb-4">
+                              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ backgroundColor: m.accent }}>
+                                 {m.icon}
+                              </div>
+                              <p className="text-sm font-black uppercase tracking-tighter opacity-40">{m.label}</p>
                            </div>
-                           <p className="text-sm font-black uppercase tracking-tighter opacity-40">{m.label}</p>
+                           <p className="text-4xl font-black tracking-tighter text-stone-900 group-hover:scale-105 transition-transform origin-left">
+                              {m.prefix || ''}
+                              <EditableNumber 
+                                value={m.val as number} 
+                                onChange={(v) => updateReportData({ [m.key]: v })} 
+                                isViewer={isViewerMode} 
+                              />
+                           </p>
                         </div>
-                        <p className="text-4xl font-black tracking-tighter text-stone-900 group-hover:scale-105 transition-transform origin-left">
-                           {m.prefix || ''}
-                           <EditableNumber 
-                             value={m.val as number} 
-                             onChange={(v) => updateReportData({ [m.key]: v })} 
-                             isViewer={isViewerMode} 
-                           />
-                        </p>
-                     </div>
-                   ))}
-               </div>
+                      </TemplateTransformWrapper>
+                    ))}
+                </div>
                
                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 flex-1 relative z-10">
                   <BentoCard className="flex flex-col p-8 bg-white/50 backdrop-blur-sm border-none pointer-events-auto">
@@ -3007,7 +3321,7 @@ export default function App() {
       case 'engagement':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-40 space-y-12 flex flex-col" style={containerStyle}>
+            <div className="min-h-[1122px] p-24 md:p-40 space-y-12 flex flex-col" style={containerStyle}>
                <BentoCard className="overflow-hidden">
                   <div className="flex justify-between items-center mb-8 border-b pb-4 gap-4">
                      <h3 className="text-xl md:text-2xl font-black uppercase tracking-tighter truncate">
@@ -3086,7 +3400,7 @@ export default function App() {
       case 'grid_metrics':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-40 flex flex-col gap-12" style={containerStyle}>
+            <div className="min-h-[1122px] p-24 md:p-40 flex flex-col gap-12" style={containerStyle}>
                 <div className="flex justify-between items-center">
                    <h2 className="text-5xl font-black uppercase tracking-tighter italic">Grid Metrics</h2>
                    <div className="bg-stone-900 text-white px-6 py-2 rounded-full font-black text-sm uppercase italic">Data View</div>
@@ -3138,7 +3452,7 @@ export default function App() {
       case 'trends_opens':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-40 flex flex-col gap-12" style={containerStyle}>
+            <div className="min-h-[1122px] p-24 md:p-40 flex flex-col gap-12" style={containerStyle}>
                 <div className="flex justify-between items-center">
                    <h2 className="text-5xl font-black uppercase tracking-tighter italic">Trends Opens</h2>
                    <div className="flex items-center gap-4">
@@ -3209,7 +3523,7 @@ export default function App() {
       case 'funnel':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-40 flex flex-col gap-12" style={containerStyle}>
+            <div className="min-h-[1122px] p-24 md:p-40 flex flex-col gap-12" style={containerStyle}>
                 <div className="flex justify-between items-center px-4">
                    <h2 className="text-5xl font-black uppercase tracking-tighter italic">Funnel Distribution</h2>
                    <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-300">
@@ -3257,7 +3571,7 @@ export default function App() {
       case 'performance':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-40 flex flex-col gap-12" style={containerStyle}>
+            <div className="min-h-[1122px] p-24 md:p-40 flex flex-col gap-12" style={containerStyle}>
                 <div className="flex justify-between items-center px-4">
                    <h2 className="text-5xl font-black uppercase tracking-tighter italic">Performance</h2>
                    <div className="bg-red-500 text-white px-6 py-2 rounded-full font-black text-sm uppercase italic">Live Metrics</div>
@@ -3317,7 +3631,7 @@ export default function App() {
       case 'blank':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-40 flex flex-col items-center justify-center relative overflow-hidden" style={containerStyle}>
+            <div className="min-h-[1122px] p-24 md:p-40 flex flex-col items-center justify-center relative overflow-hidden" style={containerStyle}>
                 {!section.bgImage && (
                   <div className="text-stone-200 uppercase font-black tracking-[0.5em] text-xs animate-pulse">
                     Empty Canvas
@@ -3329,7 +3643,7 @@ export default function App() {
       case 'thanks':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-40 flex flex-col items-center justify-center relative overflow-hidden" style={containerStyle}>
+            <div className="min-h-[1122px] p-24 md:p-40 flex flex-col items-center justify-center relative overflow-hidden" style={containerStyle}>
                 <div className="absolute inset-0 opacity-10 pointer-events-none">
                    <svg viewBox="0 0 100 100" className="w-full h-full fill-none stroke-black stroke-[0.1] stroke-dasharray-[1,1]">
                       <path d="M0,50 Q25,25 50,50 T100,50" />
@@ -3372,7 +3686,7 @@ export default function App() {
       case 'metrics':
         return (
           <SectionWrapper key={section.id} {...commonProps}>
-            <div className="min-h-[750px] p-24 md:p-40 flex flex-col justify-center" style={containerStyle}>
+            <div className="min-h-[1122px] p-24 md:p-40 flex flex-col justify-center" style={containerStyle}>
                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
                {[
                  { label: data.metricsLabels?.[0] || "Total Emails Sent", val: 2871, icon: <Users/>, sub: "Contact Count" },
@@ -3547,32 +3861,29 @@ export default function App() {
   // Auto-save logic
   const debouncedSave = useCallback(
     debounce(async (currentData: ReportData, currentId: string | null, currentUser: User | null) => {
-      if (!currentUser) return;
+      if (!currentUser || isViewerMode) return;
       
-      // Check document size estimate (1MB limit)
       const dataSize = JSON.stringify(currentData).length;
       if (dataSize > 900000) {
         console.warn(`Report data size (${dataSize} bytes) is approaching Firestore 1MB limit.`);
       }
 
-      setIsSaving(true);
+      setIsAutoSaving(true);
       try {
         const id = await saveReport(currentId, currentData);
-        if (!currentId) {
+        if (id && id !== currentId) {
           setReportId(id);
           const newUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?reportId=${id}`;
           window.history.pushState({ path: newUrl }, '', newUrl);
         }
+        setLastSaved(new Date());
       } catch (err: any) {
-        if (err.message?.includes('exceeds the maximum allowed size')) {
-          alert("Document too large! Try reducing image sizes or removing some images.");
-        }
         console.error("Auto-save failed", err);
       } finally {
-        setIsSaving(false);
+        setIsAutoSaving(false);
       }
-    }, 2000),
-    []
+    }, 3000), // Increased to 3s for better UX
+    [isViewerMode]
   );
 
   useEffect(() => {
@@ -3712,123 +4023,94 @@ export default function App() {
       // Small delay for any final settling
       await new Promise(r => setTimeout(r, 800));
 
-      // Use html2canvas on the ENTIRE container to get floating elements correctly
+      // Use html2canvas page by page for better reliability and quality
       const { width: captureWidth } = getPageDimensions();
+      const sections = Array.from(previewArea.querySelectorAll('.print\\:break-after-page')) as HTMLElement[];
       
-      const captureOptions = {
-        scale: 2, // 2x for retina quality
-        useCORS: true,
-        backgroundColor: data.themeColor || '#FFFFFF',
-        logging: false,
-        imageTimeout: 0,
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: captureWidth,
-        width: captureWidth,
-        onclone: (clonedDoc: Document) => {
-          const win = clonedDoc.defaultView || window;
-          
-          // 1. Handle Forms: Convert inputs/textareas to DIVs so they render correctly
-          clonedDoc.querySelectorAll('textarea, input').forEach((el: any) => {
-            const div = clonedDoc.createElement('div');
-            div.textContent = el.value || el.placeholder || '';
-            const style = win.getComputedStyle(el);
-            // Copy essential styling
-            ['fontSize', 'fontFamily', 'fontWeight', 'color', 'padding', 'lineHeight', 'textAlign', 'whiteSpace'].forEach(prop => {
-              (div.style as any)[prop] = style[prop as any];
-            });
-            div.style.width = style.width;
-            div.style.height = style.height;
-            div.style.display = 'block';
-            div.style.overflow = 'hidden';
-            el.parentNode?.replaceChild(div, el);
-          });
+      if (sections.length === 0) {
+        throw new Error("No sections found to export");
+      }
 
-          // 2. Fix colors and modern CSS
-          const colorRegex = /(oklch|oklab|color-mix)\((?:[^()]+|\([^()]*\))+\)/g;
-          const colorFallback = '#78716c';
-          clonedDoc.querySelectorAll('style').forEach(s => {
-            if (s.textContent) s.textContent = s.textContent.replace(colorRegex, colorFallback);
-          });
-
-          const all = clonedDoc.getElementsByTagName('*');
-          for (let i = 0; i < all.length; i++) {
-            const el = all[i] as HTMLElement;
-            const style = win.getComputedStyle(el);
-            if (style.color?.includes('oklch')) el.style.color = colorFallback;
-            if (style.backgroundColor?.includes('oklch')) el.style.backgroundColor = colorFallback;
-            if (style.borderColor?.includes('oklch')) el.style.borderColor = colorFallback;
-          }
-
-          // 3. Force clean layout for capture
-          const container = clonedDoc.getElementById('report-preview-area');
-          if (container) {
-            container.style.transform = 'none';
-            container.style.width = `${captureWidth}px`;
-            container.style.margin = '0';
-            container.style.padding = '0';
-            container.style.display = 'flex';
-            container.style.flexDirection = 'column';
-            container.style.gap = '48px'; // Match the gap-12 from the UI
-            container.style.boxShadow = 'none';
-            container.style.overflow = 'visible'; // Ensure nothing is clipped
-            
-            // Fix for absolute elements positioning
-            container.style.position = 'relative';
-          }
-
-          // Ensure floating elements are visible and positioned correctly
-          clonedDoc.querySelectorAll('.group\\/floating').forEach((el: any) => {
-             el.style.visibility = 'visible';
-             el.style.opacity = el.style.opacity || '1';
-             // Hide handles in print
-             el.querySelectorAll('.cursor-nwse-resize, .group\\/rotate, button').forEach((h: any) => h.style.display = 'none');
-          });
-        }
-      };
-
-      const canvas = await html2canvas(previewArea, captureOptions);
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      let pdf: jsPDF | null = null;
       
-      const sections = previewArea.querySelectorAll('.print\\:break-after-page');
-      
-      // Calculate dimensions for jsPDF
-      const pdf = new jsPDF({
-        orientation: captureWidth > 1200 ? 'l' : 'p',
-        unit: 'px',
-        format: [captureWidth, 1600] 
-      });
-
-      if (sections.length > 0) {
-        let currentY = 0;
+      for (let i = 0; i < sections.length; i++) {
+        const section = sections[i];
+        const sectionHeight = section.offsetHeight;
         
-        for (let i = 0; i < sections.length; i++) {
-          const section = sections[i] as HTMLElement;
-          const sectionHeight = section.offsetHeight;
-          const gap = i < sections.length - 1 ? 48 : 0;
-          
-          if (i > 0) pdf.addPage([captureWidth, sectionHeight], captureWidth > sectionHeight ? 'l' : 'p');
-          else {
-            (pdf as any).deletePage(1);
-            pdf.addPage([captureWidth, sectionHeight], captureWidth > sectionHeight ? 'l' : 'p');
-          }
+        const canvas = await html2canvas(section, {
+          scale: 2, // 2x for professional clarity
+          useCORS: true,
+          backgroundColor: data.themeColor || '#FFFFFF',
+          logging: false,
+          imageTimeout: 0,
+          width: captureWidth,
+          height: sectionHeight,
+          onclone: (clonedDoc: Document) => {
+            const win = clonedDoc.defaultView || window;
+            
+            // 1. Handle Forms: Convert inputs/textareas to DIVs
+            clonedDoc.querySelectorAll('textarea, input').forEach((el: any) => {
+              const div = clonedDoc.createElement('div');
+              div.textContent = el.value || el.placeholder || '';
+              const style = win.getComputedStyle(el);
+              ['fontSize', 'fontFamily', 'fontWeight', 'color', 'padding', 'lineHeight', 'textAlign', 'whiteSpace'].forEach(prop => {
+                (div.style as any)[prop] = style[prop as any];
+              });
+              div.style.width = style.width;
+              div.style.height = style.height;
+              div.style.display = 'block';
+              div.style.overflow = 'hidden';
+              el.parentNode?.replaceChild(div, el);
+            });
 
-          pdf.addImage(imgData, 'JPEG', 0, -currentY, captureWidth, canvas.height / 2);
-          currentY += sectionHeight + gap;
+            // 2. Fix colors and modern CSS for the cloned section
+            const colorRegex = /(oklch|oklab|color-mix)\((?:[^()]+|\([^()]*\))+\)/g;
+            const colorFallback = '#78716c';
+            clonedDoc.querySelectorAll('style').forEach(s => {
+              if (s.textContent) s.textContent = s.textContent.replace(colorRegex, colorFallback);
+            });
+
+            const clonedSection = clonedDoc.getElementById(section.id);
+            if (clonedSection) {
+              clonedSection.style.margin = '0';
+              clonedSection.style.boxShadow = 'none';
+              clonedSection.style.borderRadius = '0';
+            }
+
+            // Ensure floating elements are visible and positioned correctly
+            clonedDoc.querySelectorAll('.group\\/floating').forEach((el: any) => {
+               el.style.visibility = 'visible';
+               el.style.opacity = el.style.opacity || '1';
+               el.querySelectorAll('.cursor-nwse-resize, .group\\/rotate, button').forEach((h: any) => h.style.display = 'none');
+            });
+          }
+        });
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        
+        if (!pdf) {
+          pdf = new jsPDF({
+            orientation: captureWidth > sectionHeight ? 'l' : 'p',
+            unit: 'px',
+            format: [captureWidth, sectionHeight]
+          });
+        } else {
+          pdf.addPage([captureWidth, sectionHeight], captureWidth > sectionHeight ? 'l' : 'p');
         }
+
+        pdf.addImage(imgData, 'JPEG', 0, 0, captureWidth, sectionHeight, undefined, 'FAST');
+        
+        // Update progress if needed
+        setLoadingMessage(`Exporting page ${i + 1} of ${sections.length}...`);
+      }
+
+      if (pdf) {
         const title = (data.reportTitle || 'Report').replace(/\s+/g, '_');
         pdf.save(`${title}_${Date.now()}.pdf`);
-      } else {
-        const h = canvas.height / 2;
-        const pdfSingle = new jsPDF({ orientation: captureWidth > h ? 'l' : 'p', unit: 'px', format: [captureWidth, h] });
-        pdfSingle.addImage(imgData, 'JPEG', 0, 0, captureWidth, h);
-        const title = (data.reportTitle || 'Report').replace(/\s+/g, '_');
-        pdfSingle.save(`${title}_${Date.now()}.pdf`);
-        return;
       }
     } catch (err) {
       console.error("PDF generation failed:", err);
-      alert(`Failed to generate PDF. Please try the "Save as Web Format" option for the most accurate results.`);
+      alert(`Failed to generate PDF. Your browser might be blocking the download or the report is too large.`);
     } finally {
       setIsLoading(false);
     }
@@ -4068,8 +4350,20 @@ export default function App() {
                 <Plus size={14} />
               </button>
             </div>
-            <div className="h-4 w-[1px] bg-white/10 mx-2" />
-            <CloudCheck size={18} className="text-emerald-400 opacity-80" />
+             <div className="h-4 w-[1px] bg-white/10 mx-2" />
+            <div className="flex items-center gap-2 px-2 min-w-[100px]">
+              {isAutoSaving ? (
+                <>
+                  <Loader2 size={14} className="animate-spin text-mustard" />
+                  <span className="text-[10px] font-black uppercase text-mustard/60 animate-pulse tracking-tighter">Saving...</span>
+                </>
+              ) : (
+                <>
+                  <CloudCheck size={18} className="text-emerald-400 opacity-80" />
+                  <span className="text-[10px] font-black uppercase text-emerald-400/60 tracking-tighter">Saved</span>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="flex-1 text-center px-4">
@@ -4109,7 +4403,7 @@ export default function App() {
       <div className="flex-1 flex overflow-hidden">
         {/* Loading Overlay */}
         <AnimatePresence>
-          {(isLoading || isSaving) && (
+          {isLoading && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -4123,7 +4417,7 @@ export default function App() {
                 </div>
               </div>
               <h2 className="mt-8 text-2xl font-black tracking-tighter leading-none italic uppercase">
-                {isLoading ? "Fetching Design..." : "Saving Masterpiece..."}
+                Fetching Design...
               </h2>
               <p className="mt-4 text-[10px] font-black tracking-[0.3em] text-mustard uppercase opacity-80">
                 {loadingMessage || "Syncing with Cloud Core"}
@@ -4172,6 +4466,12 @@ export default function App() {
                 label="Brand" 
                 active={sidebarTab === 'brand'} 
                 onClick={() => { setSidebarTab('brand'); setIsSidebarOpen(true); }} 
+              />
+              <RailButton 
+                icon={<LayersIcon size={22} />} 
+                label="Layers" 
+                active={sidebarTab === 'layers'} 
+                onClick={() => { setSidebarTab('layers'); setIsSidebarOpen(true); }} 
               />
               <RailButton 
                 icon={<UploadCloud size={22} />} 
@@ -4251,6 +4551,7 @@ export default function App() {
                   </div>
                 )}
                 {sidebarTab === 'tools' && renderToolsTab()}
+                {sidebarTab === 'layers' && renderLayersTab()}
                 {sidebarTab === 'apps' && (
                   <div className="flex flex-col items-center justify-center pt-20 text-center px-6">
                     <div className="w-16 h-16 bg-stone-50 rounded-full flex items-center justify-center text-stone-200 mb-4">
@@ -4272,36 +4573,82 @@ export default function App() {
         {/* Workspace */}
         <main className="flex-1 flex flex-col relative bg-[#252b33] overflow-hidden">
           {/* Canvas Area */}
-          <div className="flex-1 overflow-auto relative scrollbar-canva p-12 md:p-32">
-            <div className="min-w-fit flex flex-col items-center">
+          <div 
+            className="flex-1 overflow-auto relative scrollbar-canva p-12 md:p-32"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                handleSelectElement(null);
+                setActiveSectionId(null);
+                setSidebarTab('inspector');
+              }
+            }}
+          >
+              <div 
+                className="min-w-fit flex flex-col items-center"
+                style={{ 
+                  transform: `scale(${zoom})`, 
+                  transformOrigin: 'top center',
+                  transition: 'transform 0.15s ease-out'
+                }}
+              >
               {/* Canva Element Toolbar (Floating) */}
               <AnimatePresence>
-                {selectedElementId && (
+                {selectedElementId ? (
                   <motion.div 
+                    key="context-toolbar"
                     initial={{ y: 20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     exit={{ y: 20, opacity: 0 }}
-                    className="fixed top-20 left-1/2 -translate-x-1/2 z-[120] bg-white border border-stone-200 shadow-2xl rounded-2xl h-12 flex items-center px-4 gap-4"
+                    className="fixed top-20 left-1/2 -translate-x-1/2 z-[100]"
                   >
-                      <PropertyBarContent 
-                        element={(data.floatingElements || []).find(e => e.id === selectedElementId)} 
-                        onUpdate={(updates) => updateElement(selectedElementId, updates)}
-                        onDelete={handleDeleteElement}
+                      <ContextToolbar 
+                        selectedElementId={selectedElementId}
+                        elements={data.floatingElements || []}
+                        updateEl={updateElement}
+                        deleteEl={handleDeleteElement}
+                        data={data}
+                        updateTemplateStyle={updateTemplateStyle}
                       />
                   </motion.div>
-                )}
+                ) : activeSectionId ? (
+                  <motion.div 
+                    key="page-toolbar"
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 20, opacity: 0 }}
+                    className="fixed top-20 left-1/2 -translate-x-1/2 z-[100]"
+                  >
+                    <PageToolbar 
+                      activeSectionId={activeSectionId} 
+                      data={data} 
+                      onUpdateSection={(id, updates) => {
+                         if (updates.themeColor) {
+                           setData(prev => ({ ...prev, themeColor: updates.themeColor }));
+                         }
+                      }} 
+                    />
+                  </motion.div>
+                ) : null}
               </AnimatePresence>
 
               <div 
                 ref={reportRef}
                 id="report-preview-area"
-                className="flex flex-col gap-12 origin-top transition-all shadow-2xl ring-1 ring-white/5 bg-white mx-auto"
+                className="flex flex-col gap-12 origin-top transition-all shadow-2xl ring-1 ring-white/5 mx-auto"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) {
+                    handleSelectElement(null);
+                    setActiveSectionId(null);
+                    setSidebarTab('inspector');
+                  }
+                }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleDrop}
                 style={{ 
                   transform: `scale(${zoom})`,
                   width: `${getPageDimensions().width}px`,
-                  minHeight: `${getPageDimensions().height}px`
+                  minHeight: `${getPageDimensions().height}px`,
+                  backgroundColor: data.themeColor || '#FFFFFF'
                 }}
               >
                 {/* Floating Elements Layer */}

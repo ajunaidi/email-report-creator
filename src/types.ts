@@ -65,6 +65,9 @@ export interface FloatingElement {
   textShadow?: string;
   outlineColor?: string;
   outlineWidth?: number;
+  flipH?: boolean;
+  flipV?: boolean;
+  isBgRemoved?: boolean;
 }
 
 export interface ReportData {
@@ -184,6 +187,8 @@ export interface ReportData {
     opacity?: number;
     fontWeight?: string;
     fontFamily?: string;
+    flipH?: boolean;
+    flipV?: boolean;
   }>;
 
   sections: { id: string, type: 'cover' | 'overview' | 'goals' | 'growth' | 'deals' | 'metrics' | 'trends' | 'funnel' | 'table' | 'footer' | 'metrics_overview' | 'report_main' | 'distribution' | 'engagement' | 'grid_metrics' | 'trends_opens' | 'performance' | 'thanks' | 'blank', bgImage?: string }[];
